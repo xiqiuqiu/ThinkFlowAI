@@ -20,7 +20,11 @@ import {
     Settings,
     Palette,
     Grid3X3,
-    Trash2
+    Trash2,
+    X,
+    Maximize2,
+    Terminal,
+    ChevronRight
 } from 'lucide-vue-next'
 import { VueFlow, useVueFlow, Position, MarkerType, Handle } from '@vue-flow/core'
 import { Background, BackgroundVariant } from '@vue-flow/background'
@@ -35,18 +39,80 @@ import '@vue-flow/core/dist/theme-default.css'
 const API_KEY = import.meta.env.VITE_ZHIPU_AI_API_KEY
 
 // VueFlow 实例
-const { addNodes, addEdges, onConnect, setNodes, setEdges, nodes: flowNodes, edges: flowEdges, updateNode, fitView } = useVueFlow()
+const { addNodes, addEdges, onConnect, setNodes, setEdges, nodes: flowNodes, edges: flowEdges, updateNode, fitView, onNodeDragStart, onNodeDragStop } = useVueFlow()
 
 // 状态管理
 const ideaInput = ref('')
 const isLoading = ref(false)
 const hoveredNodeId = ref<string | null>(null)
 const focusedNodeId = ref<string | null>(null)
+const draggingNodeId = ref<string | null>(null)
+const previewImageUrl = ref<string | null>(null)
 
-// 计算当前是否有节点处于“活跃”状态（被聚焦、悬停或正在生成）
+// 拖拽监听
+onNodeDragStart(e => {
+    draggingNodeId.value = e.node.id
+})
+
+onNodeDragStop(() => {
+    draggingNodeId.value = null
+})
+
+// 计算当前是否有节点处于“活跃”状态（被选中、聚焦、拖拽或正在生成）
 const activeNodeId = computed(() => {
     const expandingNode = flowNodes.value.find(n => n.data.isExpanding)
-    return expandingNode?.id || focusedNodeId.value || hoveredNodeId.value
+    const selectedNode = flowNodes.value.find(n => n.selected)
+    return expandingNode?.id || selectedNode?.id || draggingNodeId.value || focusedNodeId.value
+})
+
+/**
+ * 递归获取所有子节点 ID
+ */
+const getDescendantIds = (nodeId: string, ids: Set<string> = new Set()): Set<string> => {
+    flowEdges.value.forEach(edge => {
+        if (edge.source === nodeId) {
+            ids.add(edge.target)
+            getDescendantIds(edge.target, ids)
+        }
+    })
+    return ids
+}
+
+// 计算当前活跃节点的相关路径（向上追溯到根，向下包含所有子孙）
+const activePath = computed(() => {
+    const nodeIds = new Set<string>()
+    const edgeIds = new Set<string>()
+
+    if (!activeNodeId.value) return { nodeIds, edgeIds }
+
+    const targetId = activeNodeId.value
+    nodeIds.add(targetId)
+
+    // 1. 向上追溯到根节点
+    let currentId = targetId
+    while (currentId) {
+        const edge = flowEdges.value.find(e => e.target === currentId)
+        if (edge) {
+            edgeIds.add(edge.id)
+            nodeIds.add(edge.source)
+            currentId = edge.source
+        } else {
+            break
+        }
+    }
+
+    // 2. 向下包含所有子孙节点和相关连线
+    const descendantIds = getDescendantIds(targetId)
+    descendantIds.forEach(id => nodeIds.add(id))
+
+    // 3. 收集子孙节点之间的连线
+    flowEdges.value.forEach(edge => {
+        if (nodeIds.has(edge.source) && nodeIds.has(edge.target)) {
+            edgeIds.add(edge.id)
+        }
+    })
+
+    return { nodeIds, edgeIds }
 })
 
 // 画布配置
@@ -57,17 +123,39 @@ const config = reactive({
     showControls: true
 })
 
-// 监听配置变化更新现有连线
+const lastAppliedStatus = ref('')
+
+// 监听 activePath 和配置变化，动态更新连线状态
 watch(
-    () => config.edgeColor,
-    newColor => {
+    [() => activeNodeId.value, () => config.edgeColor, () => flowEdges.value.length, () => flowNodes.value.some(n => n.data.isExpanding)],
+    ([newNodeId, newColor, newLength, anyExpanding]) => {
+        const { edgeIds } = activePath.value
+        const edgeIdsStr = Array.from(edgeIds).sort().join(',')
+
+        // 状态标识：包含高亮边、颜色、以及是否有节点在发散（影响动画）
+        const currentStatus = `${edgeIdsStr}-${newColor}-${anyExpanding}`
+        if (lastAppliedStatus.value === currentStatus) return
+        lastAppliedStatus.value = currentStatus
+
         setEdges(
-            flowEdges.value.map(edge => ({
-                ...edge,
-                style: { ...edge.style, stroke: newColor }
-            }))
+            flowEdges.value.map(edge => {
+                const isHighlighted = edgeIds.has(edge.id)
+                const isExpanding = !!flowNodes.value.find(n => n.id === edge.source)?.data.isExpanding
+
+                return {
+                    ...edge,
+                    animated: isHighlighted || isExpanding,
+                    style: {
+                        ...edge.style,
+                        stroke: isHighlighted ? newColor : `${newColor}33`,
+                        strokeWidth: isHighlighted ? 3 : 2,
+                        transition: 'all 0.3s ease'
+                    }
+                }
+            })
         )
-    }
+    },
+    { immediate: true }
 )
 
 /**
@@ -126,6 +214,27 @@ const generateNodeImage = async (nodeId: string, prompt: string) => {
 }
 
 /**
+ * 递归获取从根节点到当前节点的路径
+ */
+const findPathToNode = (nodeId: string): string[] => {
+    const path: string[] = []
+    let currentId = nodeId
+
+    while (currentId) {
+        const node = flowNodes.value.find(n => n.id === currentId)
+        if (node) {
+            path.unshift(`${node.data.label} (${node.data.description})`)
+            // 查找连入该节点的边
+            const edge = flowEdges.value.find(e => e.target === currentId)
+            currentId = edge ? edge.source : ''
+        } else {
+            break
+        }
+    }
+    return path
+}
+
+/**
  * 调用智谱AI生成思维发散节点
  */
 const expandIdea = async (param?: any, customInput?: string) => {
@@ -135,8 +244,10 @@ const expandIdea = async (param?: any, customInput?: string) => {
 
     if (!text || (parentNode ? parentNode.data.isExpanding : isLoading.value)) return
 
+    // 记录父节点加载状态
     if (parentNode) {
-        updateNode(parentNode.id, { data: { ...parentNode.data, isExpanding: true } })
+        const node = flowNodes.value.find(n => n.id === parentNode.id)
+        if (node) node.data.isExpanding = true
     } else {
         isLoading.value = true
     }
@@ -151,9 +262,9 @@ const expandIdea = async (param?: any, customInput?: string) => {
 
 工作流程：
 1. 用户给出一个初始想法（或选择一个已有节点继续追问）。
-2. 你根据当前想法和已有对话历史，生成 3-5 个更深层或相关维度的子想法。
-3. 每个子想法包含简短名称和极简描述。
-4. 如果用户的问题明显是针对某个已有节点的追问，请结合上下文做针对性发散。
+2. 你需要根据【思考上下文路径】（即从根节点到当前节点的思考链路）来理解用户的意图。
+3. 生成 3-5 个更深层或相关维度的子想法。
+4. 每个子想法包含简短名称和极简描述。
 
 返回格式必须为严格 JSON：
 {
@@ -163,29 +274,15 @@ const expandIdea = async (param?: any, customInput?: string) => {
   ]
 }
 
-示例：
-用户："年夜饭推荐"
-你返回：{
-  "nodes": [
-    { "text": "传统年菜", "description": "饺子、鱼、年糕等经典菜谱" },
-    { "text": "创新年菜", "description": "融合中西风格的新式年夜饭" },
-    { "text": "素食年夜饭", "description": "适合素食者的丰盛菜单" },
-    { "text": "快手年夜饭", "description": "省时省力又显丰盛的方案" }
-  ]
-}
-
-当用户追问时（例如用户说："详细说说传统年菜"），你结合上下文发散出更细的子节点：
-{
-  "nodes": [
-    { "text": "北方饺子", "description": "多种馅料与蘸料搭配" },
-    { "text": "清蒸鱼", "description": "寓意年年有余的做法与选鱼技巧" },
-    { "text": "年糕甜品", "description": "不同地区的甜味或咸味年糕" }
-  ]
-}
-
 注意：只返回 JSON，不附加解释。`
 
-    const userMessage = parentNode && customInput ? `核心想法: ${parentNode.data.label}\n用户追问: ${customInput}` : text
+    let userMessage = ''
+    if (parentNode) {
+        const path = findPathToNode(parentNode.id)
+        userMessage = `[思考上下文路径]: ${path.join(' -> ')}\n[当前选择节点]: ${parentNode.data.label}\n[用户追问/新要求]: ${customInput || '请继续深入发散'}`
+    } else {
+        userMessage = `核心想法: ${text}`
+    }
 
     try {
         const response = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
@@ -220,7 +317,13 @@ const expandIdea = async (param?: any, customInput?: string) => {
                 id: rootId,
                 type: 'window',
                 position: { x: startX, y: startY },
-                data: { label: text, description: '核心想法', type: 'root' },
+                data: {
+                    label: text,
+                    description: '核心想法',
+                    type: 'root',
+                    isExpanding: false,
+                    followUp: ''
+                },
                 sourcePosition: Position.Right,
                 targetPosition: Position.Left
             })
@@ -234,7 +337,11 @@ const expandIdea = async (param?: any, customInput?: string) => {
         console.error('Expansion Error:', error)
     } finally {
         if (parentNode) {
-            updateNode(parentNode.id, { data: { ...parentNode.data, isExpanding: false, followUp: '' } })
+            const node = flowNodes.value.find(n => n.id === parentNode.id)
+            if (node) {
+                node.data.isExpanding = false
+                node.data.followUp = ''
+            }
         } else {
             isLoading.value = false
         }
@@ -345,16 +452,17 @@ const startNewSession = () => {
                 <Controls v-if="config.showControls" />
 
                 <!-- 自定义节点插槽 -->
-                <template #node-window="{ id, data }">
+                <template #node-window="{ id, data, selected }">
                     <div
                         class="window-node group transition-all duration-500"
                         :class="{
-                            'opacity-20 grayscale-[0.5] blur-[0.5px] scale-[0.98]': activeNodeId && activeNodeId !== id,
-                            'opacity-100 grayscale-0 blur-0 scale-105 z-50': activeNodeId === id
+                            'opacity-10 grayscale-[0.8] blur-[1px] scale-[0.95] pointer-events-none': activeNodeId && !activePath.nodeIds.has(id),
+                            'opacity-100 grayscale-0 blur-0 scale-105 z-50 ring-2 ring-offset-4': activePath.nodeIds.has(id)
                         }"
                         :style="{
-                            borderColor: activeNodeId === id ? config.edgeColor : config.edgeColor + '40',
-                            boxShadow: activeNodeId === id ? `0 20px 50px -12px ${config.edgeColor}40` : ''
+                            borderColor: activePath.nodeIds.has(id) ? config.edgeColor : config.edgeColor + '40',
+                            boxShadow: activeNodeId === id ? `0 20px 50px -12px ${config.edgeColor}40` : '',
+                            '--tw-ring-color': selected ? config.edgeColor + '40' : 'transparent'
                         }"
                         @mouseenter="hoveredNodeId = id"
                         @mouseleave="hoveredNodeId = null"
@@ -364,15 +472,27 @@ const startNewSession = () => {
                         <Handle type="source" :position="Position.Right" class="!bg-transparent !border-none" />
 
                         <!-- Window Header -->
-                        <div class="window-header" :style="{ backgroundColor: activeNodeId === id ? config.edgeColor + '15' : config.edgeColor + '05' }">
+                        <div class="window-header" :style="{ backgroundColor: activePath.nodeIds.has(id) ? config.edgeColor + '15' : config.edgeColor + '05' }">
                             <div class="flex gap-1.5">
-                                <div class="w-2 h-2 rounded-full" :style="{ backgroundColor: config.edgeColor }"></div>
+                                <div class="w-2 h-2 rounded-full" :style="{ backgroundColor: activePath.nodeIds.has(id) ? config.edgeColor : config.edgeColor + '40' }"></div>
                                 <div class="w-2 h-2 rounded-full bg-slate-200"></div>
                                 <div class="w-2 h-2 rounded-full bg-slate-200"></div>
                             </div>
-                            <span class="window-title" :style="{ color: config.edgeColor }">
+                            <span class="window-title" :style="{ color: activePath.nodeIds.has(id) ? config.edgeColor : '' }">
                                 {{ data.type === 'root' ? 'main.ts' : 'module.tsx' }}
                             </span>
+                        </div>
+
+                        <!-- Loading Overlay for Node -->
+                        <div
+                            v-if="data.isExpanding"
+                            class="absolute inset-0 z-20 flex flex-col items-center justify-center bg-white/60 backdrop-blur-[2px] rounded-2xl transition-all duration-300"
+                        >
+                            <div class="relative">
+                                <RefreshCw class="w-8 h-8 text-slate-900 animate-spin mb-3" :style="{ color: config.edgeColor }" />
+                                <div class="absolute inset-0 blur-xl opacity-20 animate-pulse" :style="{ backgroundColor: config.edgeColor }"></div>
+                            </div>
+                            <span class="text-[10px] font-black tracking-widest uppercase text-slate-500">Expanding Idea...</span>
                         </div>
 
                         <!-- Window Content -->
@@ -380,18 +500,26 @@ const startNewSession = () => {
                             <!-- Image Display -->
                             <div
                                 v-if="data.imageUrl || data.isImageLoading"
-                                class="mb-4 rounded-lg overflow-hidden bg-slate-50 border border-slate-100 aspect-video flex items-center justify-center relative group/img"
+                                class="mb-4 rounded-lg overflow-hidden bg-slate-50 border border-slate-100 aspect-video flex items-center justify-center relative group/img cursor-pointer"
+                                @click.stop="data.imageUrl ? (previewImageUrl = data.imageUrl) : null"
                             >
                                 <img v-if="data.imageUrl" :src="data.imageUrl" class="w-full h-full object-cover" />
-                                <div v-if="data.isImageLoading" class="absolute inset-0 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm">
+                                <div v-if="data.isImageLoading" class="absolute inset-0 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm cursor-default">
                                     <RefreshCw class="w-6 h-6 text-orange-500 animate-spin mb-2" />
                                     <span class="text-[8px] font-bold text-slate-400 uppercase">Generating...</span>
                                 </div>
                                 <div
                                     v-if="data.imageUrl"
-                                    class="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center"
+                                    class="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center gap-2"
                                 >
-                                    <button @click="generateNodeImage(id, data.label)" class="p-2 bg-white/20 hover:bg-white/40 rounded-full backdrop-blur-md transition-all">
+                                    <button class="p-2 bg-white/20 hover:bg-white/40 rounded-full backdrop-blur-md transition-all" title="View">
+                                        <Maximize2 class="w-4 h-4 text-white" />
+                                    </button>
+                                    <button
+                                        @click.stop="generateNodeImage(id, data.label)"
+                                        class="p-2 bg-white/20 hover:bg-white/40 rounded-full backdrop-blur-md transition-all"
+                                        title="Regenerate"
+                                    >
                                         <RefreshCw class="w-4 h-4 text-white" />
                                     </button>
                                 </div>
@@ -431,7 +559,8 @@ const startNewSession = () => {
                                         class="flex items-center gap-2 bg-slate-50 rounded-lg px-2.5 py-2 border border-slate-100 focus-within:bg-white transition-all"
                                         :style="{ borderColor: data.followUp || focusedNodeId === id ? config.edgeColor : '' }"
                                     >
-                                        <span class="font-black text-[10px] select-none" :style="{ color: config.edgeColor }">$</span>
+                                        <ChevronRight v-if="!data.followUp" class="w-3 h-3 text-slate-400" />
+                                        <Terminal v-else class="w-3 h-3" :style="{ color: config.edgeColor }" />
                                         <input
                                             v-model="data.followUp"
                                             @focus="focusedNodeId = id"
@@ -461,6 +590,16 @@ const startNewSession = () => {
             <!-- 浮动 UI 层 -->
             <div class="absolute inset-0 pointer-events-none z-10 p-12"></div>
 
+            <!-- 全局图片预览弹窗 -->
+            <div v-if="previewImageUrl" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-10" @click="previewImageUrl = null">
+                <div class="relative max-w-full max-h-full rounded-lg overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-300" @click.stop>
+                    <button @click="previewImageUrl = null" class="absolute top-4 right-4 p-2 bg-black/50 hover:bg-black/70 text-white rounded-full transition-colors z-10">
+                        <X class="w-5 h-5" />
+                    </button>
+                    <img :src="previewImageUrl" class="max-w-screen max-h-screen object-contain" />
+                </div>
+            </div>
+
             <!-- 加载状态遮罩 -->
             <div v-if="isLoading" class="absolute inset-0 z-[100] flex items-center justify-center bg-white/5 backdrop-blur-[1px] pointer-events-none">
                 <div class="bg-white/90 p-4 rounded-full shadow-2xl border border-orange-100 animate-bounce">
@@ -475,7 +614,7 @@ const startNewSession = () => {
             <div
                 class="flex items-center gap-2 px-4 py-1.5 bg-white/90 backdrop-blur-md border border-slate-200 rounded-lg shadow-sm self-start ml-2 mb-[-8px] z-10 scale-90 origin-bottom-left"
             >
-                <span class="text-emerald-500 font-bold">$</span>
+                <Sparkles class="w-3 h-3 text-emerald-500" />
                 <span class="text-slate-400 text-xs font-bold">pwd:</span>
                 <span class="text-slate-300 text-xs">~ /</span>
                 <span class="text-slate-600 text-xs font-bold">think-flow</span>
@@ -484,29 +623,24 @@ const startNewSession = () => {
             <div class="flex items-center gap-3">
                 <!-- 核心输入框容器 -->
                 <div
-                    class="bg-white rounded-2xl p-1.5 flex items-center gap-3 shadow-2xl shadow-slate-200 border border-slate-200 w-[640px] group transition-all focus-within:ring-4 focus-within:ring-orange-500/5 focus-within:border-orange-200"
+                    class="flex-grow flex items-center gap-4 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 focus-within:bg-white focus-within:shadow-xl focus-within:shadow-slate-100 transition-all"
                 >
-                    <div class="flex items-center gap-3 pl-4 flex-grow">
-                        <span class="text-orange-500 font-black text-lg select-none">$</span>
-                        <input
-                            v-model="ideaInput"
-                            @keyup.enter="expandIdea"
-                            placeholder="Type your idea and press Enter..."
-                            class="bg-transparent border-none outline-none text-slate-800 placeholder:text-slate-300 flex-grow font-bold tracking-tight text-sm"
-                        />
-                    </div>
-
-                    <div class="flex items-center gap-1 pr-1">
-                        <button
-                            @click="expandIdea"
-                            :disabled="isLoading || !ideaInput.trim()"
-                            class="flex items-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl transition-all active:scale-95 disabled:opacity-20 disabled:grayscale disabled:cursor-not-allowed group/btn"
-                        >
-                            <span class="text-[10px] font-black tracking-widest uppercase mr-1">Execute</span>
-                            <Zap v-if="!isLoading" class="w-4 h-4 text-orange-400 group-hover/btn:scale-110 transition-transform" />
-                            <RefreshCw v-else class="w-4 h-4 animate-spin" />
-                        </button>
-                    </div>
+                    <Terminal class="w-5 h-5 text-slate-400" />
+                    <input
+                        v-model="ideaInput"
+                        placeholder="Enter your thought here..."
+                        class="flex-grow bg-transparent border-none outline-none text-sm font-bold text-slate-700 placeholder:text-slate-300"
+                        @keyup.enter="expandIdea"
+                    />
+                    <button
+                        @click="expandIdea"
+                        :disabled="isLoading || !ideaInput.trim()"
+                        class="flex items-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl transition-all active:scale-95 disabled:opacity-20 disabled:grayscale disabled:cursor-not-allowed group/btn"
+                    >
+                        <span class="text-[10px] font-black tracking-widest uppercase mr-1">Execute</span>
+                        <Zap v-if="!isLoading" class="w-4 h-4 text-orange-400 group-hover/btn:scale-110 transition-transform" />
+                        <RefreshCw v-else class="w-4 h-4 animate-spin" />
+                    </button>
                 </div>
 
                 <!-- 底部按钮组 (仅保留核心功能) -->

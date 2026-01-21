@@ -91,6 +91,7 @@ const {
     fitView,
     resetLayout,
     centerRoot,
+    handleNodeDrag,
     startNewSession,
     executeReset,
     generateSummary,
@@ -139,6 +140,7 @@ const fitToView = () => {
                 :class="{ 'space-pressed': isSpacePressed }"
                 :pan-on-drag="panOnDrag"
                 :selection-key-code="'Shift'"
+                @node-drag="handleNodeDrag"
             >
                 <Background
                     :variant="config.backgroundVariant"
@@ -160,6 +162,7 @@ const fitToView = () => {
                         :selected="selected"
                         :t="t"
                         :config="config"
+                        :fitView="fitView"
                         :activeNodeId="activeNodeId"
                         :activePath="activePath"
                         :flowNodes="flowNodes"

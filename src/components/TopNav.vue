@@ -6,13 +6,14 @@
  */
 
 // 基础依赖
-import { ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 // 背景样式枚举（用于切换 Lines/Dots）
 import { BackgroundVariant } from '@vue-flow/background'
 
 // 图标：所有按钮与状态展示
 import {
+    ArrowLeftRight,
     ChevronDown,
     ChevronUp,
     Download,
@@ -58,6 +59,74 @@ const emit = defineEmits<{
  */
 const isToolsExpanded = ref(false)
 
+const isEdgeTypeMenuOpen = ref(false)
+const isBackgroundMenuOpen = ref(false)
+
+const edgeTypeOptions = [
+    { value: 'default', labelKey: 'nav.edgeTypes.default' },
+    { value: 'straight', labelKey: 'nav.edgeTypes.straight' },
+    { value: 'step', labelKey: 'nav.edgeTypes.step' },
+    { value: 'smoothstep', labelKey: 'nav.edgeTypes.smoothstep' },
+    { value: 'simplebezier', labelKey: 'nav.edgeTypes.simplebezier' }
+]
+
+const backgroundOptions = [
+    { value: BackgroundVariant.Lines, labelKey: 'nav.lines' },
+    { value: BackgroundVariant.Dots, labelKey: 'nav.dots' }
+]
+
+const currentEdgeTypeLabel = computed(() => {
+    const option = edgeTypeOptions.find(o => o.value === props.config.edgeType)
+    return option ? props.t(option.labelKey) : props.config.edgeType
+})
+
+const currentBackgroundLabel = computed(() => {
+    const option = backgroundOptions.find(o => o.value === props.config.backgroundVariant)
+    return option ? props.t(option.labelKey) : String(props.config.backgroundVariant)
+})
+
+const closeMenus = () => {
+    isEdgeTypeMenuOpen.value = false
+    isBackgroundMenuOpen.value = false
+}
+
+const toggleEdgeTypeMenu = () => {
+    isEdgeTypeMenuOpen.value = !isEdgeTypeMenuOpen.value
+    if (isEdgeTypeMenuOpen.value) isBackgroundMenuOpen.value = false
+}
+
+const toggleBackgroundMenu = () => {
+    isBackgroundMenuOpen.value = !isBackgroundMenuOpen.value
+    if (isBackgroundMenuOpen.value) isEdgeTypeMenuOpen.value = false
+}
+
+const setEdgeType = (value: string) => {
+    props.config.edgeType = value
+    closeMenus()
+}
+
+const setBackgroundVariant = (value: any) => {
+    props.config.backgroundVariant = value
+    closeMenus()
+}
+
+const handleDocumentPointerDown = (e: Event) => {
+    const target = e.target as HTMLElement | null
+    if (!target) return
+
+    if (target.closest('[data-edge-type-menu="true"]')) return
+    if (target.closest('[data-background-menu="true"]')) return
+    closeMenus()
+}
+
+onMounted(() => {
+    document.addEventListener('pointerdown', handleDocumentPointerDown)
+})
+
+onUnmounted(() => {
+    document.removeEventListener('pointerdown', handleDocumentPointerDown)
+})
+
 /**
  * 执行某个工具动作后自动收起移动端面板
  */
@@ -95,6 +164,18 @@ const callAndClose = (fn: () => void) => {
 
                 <div class="h-4 w-[1px] bg-slate-100 mx-1 flex-shrink-0"></div>
 
+                <button
+                    @click="props.config.hierarchicalDragging = !props.config.hierarchicalDragging"
+                    class="toolbar-btn border-slate-100 flex-shrink-0"
+                    :class="props.config.hierarchicalDragging ? 'text-orange-500 bg-orange-50 border-orange-100' : 'text-slate-400 hover:text-slate-600'"
+                    :title="props.t('nav.hierarchicalDragging')"
+                >
+                    <ArrowLeftRight class="w-3.5 h-3.5 md:w-4 h-4" />
+                    <span>{{ props.t('nav.hierarchicalDragging') }}</span>
+                </button>
+
+                <div class="h-4 w-[1px] bg-slate-100 mx-1 flex-shrink-0"></div>
+
                 <button @click="props.onStartNewSession" class="toolbar-btn text-red-500 hover:bg-red-50 border-red-100 flex-shrink-0" :title="props.t('nav.reset')">
                     <Trash2 class="w-3.5 h-3.5 md:w-4 h-4" />
                     <span>{{ props.t('nav.reset') }}</span>
@@ -108,18 +189,49 @@ const callAndClose = (fn: () => void) => {
                     <span class="text-[9px] md:text-[10px] font-bold text-slate-500 uppercase">{{ props.t('nav.edge') }}</span>
                 </div>
 
-                <select v-model="props.config.edgeType" class="toolbar-select flex-shrink-0">
-                    <option value="default">{{ props.t('nav.edgeTypes.default') }}</option>
-                    <option value="straight">{{ props.t('nav.edgeTypes.straight') }}</option>
-                    <option value="step">{{ props.t('nav.edgeTypes.step') }}</option>
-                    <option value="smoothstep">{{ props.t('nav.edgeTypes.smoothstep') }}</option>
-                    <option value="simplebezier">{{ props.t('nav.edgeTypes.simplebezier') }}</option>
-                </select>
+                <div data-edge-type-menu="true" class="relative flex-shrink-0">
+                    <button type="button" class="toolbar-select flex items-center gap-2" @click="toggleEdgeTypeMenu">
+                        <span>{{ currentEdgeTypeLabel }}</span>
+                        <ChevronDown class="w-3 h-3 opacity-60" />
+                    </button>
+                    <div
+                        v-if="isEdgeTypeMenuOpen"
+                        class="absolute top-full left-0 mt-2 min-w-[180px] bg-white border border-slate-200 rounded-lg shadow-xl p-1 z-50"
+                    >
+                        <button
+                            v-for="opt in edgeTypeOptions"
+                            :key="opt.value"
+                            type="button"
+                            class="w-full text-left px-3 py-2 rounded-md text-[10px] font-black tracking-widest uppercase transition-colors"
+                            :class="opt.value === props.config.edgeType ? 'bg-orange-50 text-orange-600' : 'text-slate-600 hover:bg-slate-50'"
+                            @click="setEdgeType(opt.value)"
+                        >
+                            {{ props.t(opt.labelKey) }}
+                        </button>
+                    </div>
+                </div>
 
-                <select v-model="props.config.backgroundVariant" class="toolbar-select flex-shrink-0">
-                    <option :value="BackgroundVariant.Lines">{{ props.t('nav.lines') }}</option>
-                    <option :value="BackgroundVariant.Dots">{{ props.t('nav.dots') }}</option>
-                </select>
+                <div data-background-menu="true" class="relative flex-shrink-0">
+                    <button type="button" class="toolbar-select flex items-center gap-2" @click="toggleBackgroundMenu">
+                        <span>{{ currentBackgroundLabel }}</span>
+                        <ChevronDown class="w-3 h-3 opacity-60" />
+                    </button>
+                    <div
+                        v-if="isBackgroundMenuOpen"
+                        class="absolute top-full left-0 mt-2 min-w-[140px] bg-white border border-slate-200 rounded-lg shadow-xl p-1 z-50"
+                    >
+                        <button
+                            v-for="opt in backgroundOptions"
+                            :key="String(opt.value)"
+                            type="button"
+                            class="w-full text-left px-3 py-2 rounded-md text-[10px] font-black tracking-widest uppercase transition-colors"
+                            :class="opt.value === props.config.backgroundVariant ? 'bg-orange-50 text-orange-600' : 'text-slate-600 hover:bg-slate-50'"
+                            @click="setBackgroundVariant(opt.value)"
+                        >
+                            {{ props.t(opt.labelKey) }}
+                        </button>
+                    </div>
+                </div>
 
                 <div class="h-4 w-[1px] bg-slate-100 mx-1 flex-shrink-0"></div>
 
@@ -212,18 +324,49 @@ const callAndClose = (fn: () => void) => {
                 <span class="text-[10px] font-bold text-slate-500 uppercase">{{ props.t('nav.edge') }}</span>
             </div>
 
-            <select v-model="props.config.edgeType" class="toolbar-select">
-                <option value="default">{{ props.t('nav.edgeTypes.default') }}</option>
-                <option value="straight">{{ props.t('nav.edgeTypes.straight') }}</option>
-                <option value="step">{{ props.t('nav.edgeTypes.step') }}</option>
-                <option value="smoothstep">{{ props.t('nav.edgeTypes.smoothstep') }}</option>
-                <option value="simplebezier">{{ props.t('nav.edgeTypes.simplebezier') }}</option>
-            </select>
+            <div data-edge-type-menu="true" class="relative">
+                <button type="button" class="toolbar-select flex items-center gap-2" @click="toggleEdgeTypeMenu">
+                    <span>{{ currentEdgeTypeLabel }}</span>
+                    <ChevronDown class="w-3 h-3 opacity-60" />
+                </button>
+                <div
+                    v-if="isEdgeTypeMenuOpen"
+                    class="absolute top-full left-0 mt-2 min-w-[180px] bg-white border border-slate-200 rounded-lg shadow-xl p-1 z-50"
+                >
+                    <button
+                        v-for="opt in edgeTypeOptions"
+                        :key="opt.value"
+                        type="button"
+                        class="w-full text-left px-3 py-2 rounded-md text-[10px] font-black tracking-widest uppercase transition-colors"
+                        :class="opt.value === props.config.edgeType ? 'bg-orange-50 text-orange-600' : 'text-slate-600 hover:bg-slate-50'"
+                        @click="callAndClose(() => setEdgeType(opt.value))"
+                    >
+                        {{ props.t(opt.labelKey) }}
+                    </button>
+                </div>
+            </div>
 
-            <select v-model="props.config.backgroundVariant" class="toolbar-select">
-                <option :value="BackgroundVariant.Lines">{{ props.t('nav.lines') }}</option>
-                <option :value="BackgroundVariant.Dots">{{ props.t('nav.dots') }}</option>
-            </select>
+            <div data-background-menu="true" class="relative">
+                <button type="button" class="toolbar-select flex items-center gap-2" @click="toggleBackgroundMenu">
+                    <span>{{ currentBackgroundLabel }}</span>
+                    <ChevronDown class="w-3 h-3 opacity-60" />
+                </button>
+                <div
+                    v-if="isBackgroundMenuOpen"
+                    class="absolute top-full left-0 mt-2 min-w-[140px] bg-white border border-slate-200 rounded-lg shadow-xl p-1 z-50"
+                >
+                    <button
+                        v-for="opt in backgroundOptions"
+                        :key="String(opt.value)"
+                        type="button"
+                        class="w-full text-left px-3 py-2 rounded-md text-[10px] font-black tracking-widest uppercase transition-colors"
+                        :class="opt.value === props.config.backgroundVariant ? 'bg-orange-50 text-orange-600' : 'text-slate-600 hover:bg-slate-50'"
+                        @click="callAndClose(() => setBackgroundVariant(opt.value))"
+                    >
+                        {{ props.t(opt.labelKey) }}
+                    </button>
+                </div>
+            </div>
 
             <button
                 @click="props.config.showMiniMap = !props.config.showMiniMap"

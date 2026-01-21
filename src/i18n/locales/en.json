@@ -50,7 +50,8 @@
     "summary": "SUMMARY",
     "export": "EXPORT",
     "fullscreen": "Fullscreen",
-    "exitFullscreen": "Exit Fullscreen"
+    "exitFullscreen": "Exit Fullscreen",
+    "hierarchicalDragging": "Linked Drag"
   },
   "settings": {
     "title": "API Settings",

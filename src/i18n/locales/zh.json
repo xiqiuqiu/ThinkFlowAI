@@ -50,7 +50,8 @@
     "summary": "总结",
     "export": "导出",
     "fullscreen": "全屏",
-    "exitFullscreen": "退出全屏"
+    "exitFullscreen": "退出全屏",
+    "hierarchicalDragging": "联动拖拽"
   },
   "settings": {
     "title": "API 设置",

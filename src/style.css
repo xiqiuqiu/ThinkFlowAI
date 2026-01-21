@@ -33,6 +33,7 @@ body {
 /* Markdown 渲染基础样式 */
 .markdown-body {
   @apply text-slate-700;
+  padding: 0 1rem;
 }
 
 .markdown-body h1 {

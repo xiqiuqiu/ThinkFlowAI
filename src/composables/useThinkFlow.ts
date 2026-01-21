@@ -107,6 +107,7 @@ export function useThinkFlow({ t, locale }: { t: Translate; locale: Ref<string> 
         removeEdges,
         fitView,
         onNodeDragStart,
+        onNodeDrag,
         onNodeDragStop
     } = useVueFlow()
 
@@ -122,6 +123,7 @@ export function useThinkFlow({ t, locale }: { t: Translate; locale: Ref<string> 
     const summaryContent = ref('')
 
     const draggingNodeId = ref<string | null>(null)
+    const dragLastPositionByNodeId = new Map<string, { x: number; y: number }>()
 
     /**
      * 交互：按住 Space 启用“抓手拖拽画布”
@@ -149,10 +151,79 @@ export function useThinkFlow({ t, locale }: { t: Translate; locale: Ref<string> 
      */
     onNodeDragStart(e => {
         draggingNodeId.value = e.node.id
+        dragLastPositionByNodeId.set(e.node.id, {
+            x: e.node.position.x,
+            y: e.node.position.y
+        })
     })
 
-    onNodeDragStop(() => {
+    /**
+     * 处理节点拖拽事件 (联动移动子节点)
+     */
+    const handleNodeDrag = (payload: any) => {
+        if (!config.hierarchicalDragging) return
+
+        const node = payload?.node ?? payload
+        if (!node?.id || !node?.position) return
+
+        const lastPosition = dragLastPositionByNodeId.get(node.id)
+        if (!lastPosition) {
+            const fallbackDelta = payload?.delta
+            dragLastPositionByNodeId.set(node.id, { x: node.position.x, y: node.position.y })
+            if (fallbackDelta && typeof fallbackDelta.x === 'number' && typeof fallbackDelta.y === 'number') {
+                const descendantIds = getDescendantIds(node.id)
+                if (descendantIds.size === 0) return
+
+                const selectedNodeIds = new Set(flowNodes.value.filter(n => n.selected).map(n => n.id))
+                descendantIds.forEach(id => {
+                    if (!selectedNodeIds.has(id)) {
+                        const targetNode = flowNodes.value.find(n => n.id === id)
+                        if (targetNode) {
+                            targetNode.position = {
+                                x: targetNode.position.x + fallbackDelta.x,
+                                y: targetNode.position.y + fallbackDelta.y
+                            }
+                        }
+                    }
+                })
+            }
+            return
+        }
+
+        const dx = node.position.x - lastPosition.x
+        const dy = node.position.y - lastPosition.y
+        if (dx === 0 && dy === 0) return
+
+        dragLastPositionByNodeId.set(node.id, { x: node.position.x, y: node.position.y })
+
+        const descendantIds = getDescendantIds(node.id)
+        if (descendantIds.size === 0) return
+
+        // 获取当前所有选中的节点，避免重复位移
+        const selectedNodeIds = new Set(flowNodes.value.filter(n => n.selected).map(n => n.id))
+
+        // 批量更新子节点位置
+        descendantIds.forEach(id => {
+            if (!selectedNodeIds.has(id)) {
+                const targetNode = flowNodes.value.find(n => n.id === id)
+                if (targetNode) {
+                    // 直接更新位置对象，确保 Vue 能够检测到深层变化
+                    targetNode.position = {
+                        x: targetNode.position.x + dx,
+                        y: targetNode.position.y + dy
+                    }
+                }
+            }
+        })
+    }
+
+    onNodeDrag(handleNodeDrag)
+
+    onNodeDragStop(e => {
         draggingNodeId.value = null
+        if (e?.node?.id) {
+            dragLastPositionByNodeId.delete(e.node.id)
+        }
     })
 
     /**
@@ -166,16 +237,25 @@ export function useThinkFlow({ t, locale }: { t: Translate; locale: Ref<string> 
     })
 
     /**
-     * 获取某节点所有后代节点 id（用于激活路径计算）
+     * 获取节点的所有后代节点 ID (迭代实现，更健壮)
      */
-    const getDescendantIds = (nodeId: string, ids: Set<string> = new Set()): Set<string> => {
-        flowEdges.value.forEach(edge => {
-            if (edge.source === nodeId) {
-                ids.add(edge.target)
-                getDescendantIds(edge.target, ids)
+    const getDescendantIds = (nodeId: string): Set<string> => {
+        const descendants = new Set<string>()
+        const stack = [nodeId]
+        const edges = flowEdges.value
+
+        while (stack.length > 0) {
+            const currentId = stack.pop()!
+            for (const edge of edges) {
+                if (edge.source === currentId) {
+                    if (!descendants.has(edge.target)) {
+                        descendants.add(edge.target)
+                        stack.push(edge.target)
+                    }
+                }
             }
-        })
-        return ids
+        }
+        return descendants
     }
 
     /**
@@ -235,7 +315,8 @@ export function useThinkFlow({ t, locale }: { t: Translate; locale: Ref<string> 
         edgeType: 'default',
         backgroundVariant: BackgroundVariant.Lines,
         showControls: true,
-        showMiniMap: true
+        showMiniMap: true,
+        hierarchicalDragging: true
     })
 
     const lastAppliedStatus = ref('')
@@ -763,6 +844,7 @@ export function useThinkFlow({ t, locale }: { t: Translate; locale: Ref<string> 
         fitView,
         resetLayout,
         centerRoot,
+        handleNodeDrag,
         startNewSession,
         executeReset,
         generateSummary,

@@ -41,6 +41,7 @@ const props = defineProps<{
     selected: boolean
     t: any
     config: any
+    fitView: (options?: any) => void
     activeNodeId: string | null
     activePath: { nodeIds: Set<string>; edgeIds: Set<string> }
     flowNodes: any[]
@@ -72,6 +73,22 @@ const isFocused = ref(false)
  * 从 flowNodes 中找到节点当前位置，用于扩展时定位新节点生成的参考坐标
  */
 const getNodePosition = (id: string) => props.flowNodes.find(n => n.id === id)?.position
+
+/**
+ * 输入框聚焦处理：放大节点并居中视图
+ */
+const handleFocus = () => {
+    isFocused.value = true
+    // 聚焦时将视图中心对准该节点，并给予适当的 padding 确保放大后完整可见
+    props.fitView({ nodes: [props.id], padding: 1.5, duration: 600 })
+}
+
+/**
+ * 输入框失去焦点处理
+ */
+const handleBlur = () => {
+    isFocused.value = false
+}
 </script>
 
 <template>
@@ -79,13 +96,14 @@ const getNodePosition = (id: string) => props.flowNodes.find(n => n.id === id)?.
         class="window-node group transition-all duration-500"
         :class="{
             'opacity-40 grayscale-[0.4] blur-[0.5px] scale-[0.98] pointer-events-none': props.activeNodeId && !props.activePath.nodeIds.has(props.id),
-            'opacity-100 grayscale-0 blur-0 scale-105 z-50 ring-2 ring-offset-4': props.activePath.nodeIds.has(props.id),
+            'opacity-100 grayscale-0 blur-0 scale-105 z-50 ring-2 ring-offset-4': props.activePath.nodeIds.has(props.id) && !isFocused,
+            'opacity-100 grayscale-0 blur-0 scale-110 z-[100] shadow-2xl ring-4 ring-offset-8': isFocused,
             '!w-[450px]': props.data.isDetailExpanded
         }"
         :style="{
-            borderColor: props.activePath.nodeIds.has(props.id) ? props.config.edgeColor : props.config.edgeColor + '40',
-            boxShadow: props.activeNodeId === props.id ? `0 20px 50px -12px ${props.config.edgeColor}40` : '',
-            '--tw-ring-color': props.selected ? props.config.edgeColor + '40' : 'transparent'
+            borderColor: isFocused || props.activePath.nodeIds.has(props.id) ? props.config.edgeColor : props.config.edgeColor + '40',
+            boxShadow: isFocused ? `0 25px 50px -12px ${props.config.edgeColor}60` : (props.activeNodeId === props.id ? `0 20px 50px -12px ${props.config.edgeColor}40` : ''),
+            '--tw-ring-color': isFocused || props.selected ? props.config.edgeColor + '40' : 'transparent'
         }"
     >
         <Handle type="target" :position="Position.Left" class="!bg-transparent !border-none" />
@@ -226,8 +244,8 @@ const getNodePosition = (id: string) => props.flowNodes.find(n => n.id === id)?.
                         <Terminal v-else class="w-3 h-3" :style="{ color: props.config.edgeColor }" />
                         <input
                             v-model="props.data.followUp"
-                            @focus="isFocused = true"
-                            @blur="isFocused = false"
+                            @focus="handleFocus"
+                            @blur="handleBlur"
                             @keyup.enter="props.expandIdea({ id: props.id, data: props.data, position: getNodePosition(props.id) }, props.data.followUp)"
                             :placeholder="props.t('node.followUp')"
                             class="bg-transparent border-none outline-none text-[10px] font-bold text-slate-700 flex-grow placeholder:text-slate-400"

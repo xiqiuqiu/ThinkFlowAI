@@ -786,6 +786,12 @@ export function useThinkFlow({ t, locale }: { t: Translate; locale: Ref<string> 
         const finalApiKey = apiConfig.mode === 'default' ? useConfig.apiKey || API_KEY : useConfig.apiKey
 
         try {
+            const rootNode = flowNodes.value.find(n => n.data.type === 'root')
+            const rootTopic = rootNode?.data?.label || ''
+            const detail = node.data.description || ''
+            const path = findPathToNode(nodeId)
+            const context = path.join(' -> ')
+
             const response = await fetch(useConfig.baseUrl, {
                 method: 'POST',
                 headers: {
@@ -794,7 +800,7 @@ export function useThinkFlow({ t, locale }: { t: Translate; locale: Ref<string> 
                 },
                 body: JSON.stringify({
                     model: useConfig.model,
-                    messages: [{ role: 'user', content: t('prompts.deepDivePrompt', { topic }) }]
+                    messages: [{ role: 'user', content: t('prompts.deepDivePrompt', { rootTopic, context, topic, detail }) }]
                 })
             })
 

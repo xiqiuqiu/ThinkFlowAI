@@ -56,6 +56,10 @@ const toggleFullscreen = () => {
 
 const handleFullscreenChange = () => {
     isFullscreen.value = !!document.fullscreenElement
+    // 如果手动退出了全屏，且当前还在演示模式，则同步退出演示模式
+    if (!document.fullscreenElement && isPresenting.value) {
+        _togglePresentation()
+    }
 }
 
 /**
@@ -98,13 +102,35 @@ const {
     expandIdea,
     aiStyle,
     isPresenting,
-    togglePresentation,
+    togglePresentation: _togglePresentation,
     nextPresentationNode,
     prevPresentationNode,
     searchQuery,
     searchResults,
     focusNode
 } = useThinkFlow({ t, locale })
+
+/**
+ * 演示模式与全屏联动
+ */
+const togglePresentation = () => {
+    _togglePresentation()
+    if (isPresenting.value) {
+        // 进入演示模式 -> 开启全屏
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(err => {
+                console.error(`Error attempting to enable full-screen mode: ${err.message}`)
+            })
+        }
+    } else {
+        // 退出演示模式 -> 退出全屏
+        if (document.fullscreenElement) {
+            document.exitFullscreen().catch(err => {
+                console.error(`Error attempting to exit full-screen mode: ${err.message}`)
+            })
+        }
+    }
+}
 
 /**
  * 演示模式键盘监听
@@ -184,7 +210,7 @@ const fitToView = () => {
             @toggle-locale="toggleLocale"
         />
 
-        <SideNav v-if="!isPresenting" :t="t" :locale="locale" :config="config" />
+        <SideNav v-if="!isPresenting" :t="t" :locale="locale" :config="config" :onFit="fitToView" :onResetLayout="resetLayout" :onCenterRoot="centerRoot" />
 
         <div class="flex-grow relative">
             <!-- 演示模式退出提示 -->
@@ -221,7 +247,7 @@ const fitToView = () => {
                     :size="config.backgroundVariant === BackgroundVariant.Dots ? 1.2 : 0.5"
                 />
                 <Controls v-if="false" :show-fullscreen="false" :show-fit-view="false">
-                    <ControlButton @click="toggleFullscreen" :title="isFullscreen ? t('nav.exitFullscreen') : t('nav.fullscreen')">
+                    <ControlButton @click="toggleFullscreen">
                         <component :is="isFullscreen ? Minimize : Maximize" class="w-4 h-4 text-slate-500" />
                     </ControlButton>
                 </Controls>
@@ -291,6 +317,29 @@ body {
 
 .toolbar-btn:hover {
     @apply border-current shadow-sm;
+}
+
+/* Tooltip Styles */
+.custom-tooltip {
+    @apply hidden md:block absolute px-2 py-1 bg-slate-900 text-white text-[10px] font-bold tracking-widest uppercase rounded opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-[100] shadow-xl pointer-events-none;
+}
+
+.custom-tooltip-right {
+    @apply left-full ml-3 top-1/2 -translate-y-1/2 translate-x-[-10px] group-hover:translate-x-0;
+}
+
+.custom-tooltip-bottom {
+    @apply top-full mt-2 left-1/2 -translate-x-1/2 translate-y-[-10px] group-hover:translate-y-0;
+}
+
+.custom-tooltip-right::before {
+    content: '';
+    @apply absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-slate-900;
+}
+
+.custom-tooltip-bottom::before {
+    content: '';
+    @apply absolute bottom-full left-1/2 -translate-x-1/2 border-4 border-transparent border-b-slate-900;
 }
 
 .toolbar-select {

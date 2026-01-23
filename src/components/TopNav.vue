@@ -25,13 +25,14 @@ import {
     Trash2,
     Globe,
     Settings,
-    ArrowLeftRight,
+    GitGraph,
     Map,
     Palette,
     Play,
     Search,
     Zap,
-    Brain
+    Brain,
+    Waypoints
 } from 'lucide-vue-next'
 
 /**
@@ -76,8 +77,7 @@ const edgeTypeOptions = [
     { value: 'default', labelKey: 'nav.edgeTypes.default' },
     { value: 'straight', labelKey: 'nav.edgeTypes.straight' },
     { value: 'step', labelKey: 'nav.edgeTypes.step' },
-    { value: 'smoothstep', labelKey: 'nav.edgeTypes.smoothstep' },
-    { value: 'simplebezier', labelKey: 'nav.edgeTypes.simplebezier' }
+    { value: 'smoothstep', labelKey: 'nav.edgeTypes.smoothstep' }
 ]
 
 const backgroundOptions = [
@@ -191,16 +191,10 @@ const callAndClose = (fn: () => void) => {
             <div class="h-6 w-[1px] bg-slate-200 mx-1 md:mx-2 flex-shrink-0 hidden lg:block"></div>
 
             <div class="hidden md:flex items-center gap-2">
-                <button @click="props.onFit" class="toolbar-btn text-blue-500 hover:bg-blue-50 border-blue-100 flex-shrink-0" :title="props.t('nav.fit')">
-                    <Focus class="w-3.5 h-3.5 md:w-4 h-4" />
-                    <span>{{ props.t('nav.fit') }}</span>
-                </button>
-
                 <button
                     @click="props.onTogglePresentation"
                     class="toolbar-btn flex-shrink-0"
                     :class="props.isPresenting ? 'text-green-600 bg-green-50 border-green-100' : 'text-slate-500 hover:bg-slate-50 border-slate-100'"
-                    :title="props.t('nav.presentation')"
                 >
                     <Play class="w-3.5 h-3.5 md:w-4 h-4" />
                     <span>{{ props.t('nav.presentation') }}</span>
@@ -208,31 +202,19 @@ const callAndClose = (fn: () => void) => {
 
                 <div class="h-4 w-[1px] bg-slate-100 mx-1 flex-shrink-0"></div>
 
-                <button @click="props.onResetLayout" class="toolbar-btn text-purple-500 hover:bg-purple-50 border-purple-100 flex-shrink-0" :title="props.t('nav.layout')">
-                    <LayoutDashboard class="w-3.5 h-3.5 md:w-4 h-4" />
-                    <span>{{ props.t('nav.layout') }}</span>
-                </button>
-
-                <button @click="props.onCenterRoot" class="toolbar-btn text-orange-500 hover:bg-orange-50 border-orange-100 flex-shrink-0" :title="props.t('nav.center')">
-                    <Target class="w-3.5 h-3.5 md:w-4 h-4" />
-                    <span>{{ props.t('nav.center') }}</span>
-                </button>
-
-                <div class="h-4 w-[1px] bg-slate-100 mx-1 flex-shrink-0"></div>
-
-                <button @click="props.onGenerateSummary" class="toolbar-btn text-orange-600 hover:bg-orange-50 border-orange-100 flex-shrink-0" :title="props.t('nav.summary')">
+                <button @click="props.onGenerateSummary" class="toolbar-btn text-orange-600 hover:bg-orange-50 border-orange-100 flex-shrink-0">
                     <Sparkles class="w-3.5 h-3.5 md:w-4 h-4" />
                     <span>{{ props.t('nav.summary') }}</span>
                 </button>
 
-                <button @click="props.onExportMarkdown" class="toolbar-btn text-indigo-600 hover:bg-indigo-50 border-indigo-100 flex-shrink-0" :title="props.t('nav.export')">
+                <button @click="props.onExportMarkdown" class="toolbar-btn text-indigo-600 hover:bg-indigo-50 border-indigo-100 flex-shrink-0">
                     <Download class="w-3.5 h-3.5 md:w-4 h-4" />
                     <span>{{ props.t('nav.export') }}</span>
                 </button>
 
                 <div class="h-4 w-[1px] bg-slate-100 mx-1 flex-shrink-0"></div>
 
-                <button @click="props.onStartNewSession" class="toolbar-btn text-red-500 hover:bg-red-50 border-red-100 flex-shrink-0" :title="props.t('nav.reset')">
+                <button @click="props.onStartNewSession" class="toolbar-btn text-red-500 hover:bg-red-50 border-red-100 flex-shrink-0">
                     <Trash2 class="w-3.5 h-3.5 md:w-4 h-4" />
                     <span>{{ props.t('nav.reset') }}</span>
                 </button>
@@ -253,11 +235,7 @@ const callAndClose = (fn: () => void) => {
         </div>
 
         <div class="flex items-center gap-1 md:gap-2 flex-shrink-0">
-            <button
-                @click="props.onOpenSettings"
-                class="p-1.5 md:p-2 hover:bg-slate-100 rounded-md transition-colors text-slate-400 flex items-center gap-1"
-                :title="props.t('common.settings')"
-            >
+            <button @click="props.onOpenSettings" class="p-1.5 md:p-2 hover:bg-slate-100 rounded-md transition-colors text-slate-400 flex items-center gap-1">
                 <Settings class="w-3.5 h-3.5 md:w-4 h-4" />
                 <span class="hidden md:inline text-[10px] md:text-xs font-bold">{{ props.t('common.settings') }}</span>
             </button>
@@ -285,22 +263,22 @@ const callAndClose = (fn: () => void) => {
             v-if="isToolsExpanded"
             class="md:hidden absolute top-[57px] left-0 right-0 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xl z-40 py-4 px-4 flex flex-wrap gap-3 justify-center"
         >
-            <button @click="callAndClose(props.onFit)" class="toolbar-btn text-blue-500 hover:bg-blue-50 border-blue-100" :title="props.t('nav.fit')">
+            <button @click="callAndClose(props.onFit)" class="toolbar-btn text-blue-500 hover:bg-blue-50 border-blue-100">
                 <Focus class="w-4 h-4" />
                 <span>{{ props.t('nav.fit') }}</span>
             </button>
 
-            <button @click="callAndClose(props.onResetLayout)" class="toolbar-btn text-purple-500 hover:bg-purple-50 border-purple-100" :title="props.t('nav.layout')">
+            <button @click="callAndClose(props.onResetLayout)" class="toolbar-btn text-purple-500 hover:bg-purple-50 border-purple-100">
                 <LayoutDashboard class="w-4 h-4" />
                 <span>{{ props.t('nav.layout') }}</span>
             </button>
 
-            <button @click="callAndClose(props.onCenterRoot)" class="toolbar-btn text-orange-500 hover:bg-orange-50 border-orange-100" :title="props.t('nav.center')">
+            <button @click="callAndClose(props.onCenterRoot)" class="toolbar-btn text-orange-500 hover:bg-orange-50 border-orange-100">
                 <Target class="w-4 h-4" />
                 <span>{{ props.t('nav.center') }}</span>
             </button>
 
-            <button @click="callAndClose(props.onStartNewSession)" class="toolbar-btn text-red-500 hover:bg-red-50 border-red-100" :title="props.t('nav.reset')">
+            <button @click="callAndClose(props.onStartNewSession)" class="toolbar-btn text-red-500 hover:bg-red-50 border-red-100">
                 <Trash2 class="w-4 h-4" />
                 <span>{{ props.t('nav.reset') }}</span>
             </button>
@@ -353,9 +331,8 @@ const callAndClose = (fn: () => void) => {
                 @click="props.config.hierarchicalDragging = !props.config.hierarchicalDragging"
                 class="toolbar-btn"
                 :class="props.config.hierarchicalDragging ? 'text-orange-500 bg-orange-50 border-orange-100' : 'text-slate-400 hover:text-slate-600'"
-                :title="props.t('nav.hierarchicalDragging')"
             >
-                <ArrowLeftRight class="w-4 h-4" />
+                <GitGraph class="w-4 h-4" />
                 <span>{{ props.t('nav.hierarchicalDragging') }}</span>
             </button>
 
@@ -363,18 +340,17 @@ const callAndClose = (fn: () => void) => {
                 @click="props.config.showMiniMap = !props.config.showMiniMap"
                 class="toolbar-btn border-slate-100"
                 :class="props.config.showMiniMap ? 'text-blue-500 bg-blue-50 border-blue-100' : 'text-slate-400 hover:text-slate-600'"
-                :title="props.t('nav.map')"
             >
                 <Map class="w-4 h-4" />
                 <span>{{ props.t('nav.map') }}</span>
             </button>
 
-            <button @click="callAndClose(props.onGenerateSummary)" class="toolbar-btn text-orange-600 hover:bg-orange-50 border-orange-100" :title="props.t('nav.summary')">
+            <button @click="callAndClose(props.onGenerateSummary)" class="toolbar-btn text-orange-600 hover:bg-orange-50 border-orange-100">
                 <Sparkles class="w-4 h-4" />
                 <span>{{ props.t('nav.summary') }}</span>
             </button>
 
-            <button @click="callAndClose(props.onExportMarkdown)" class="toolbar-btn text-indigo-600 hover:bg-indigo-50 border-indigo-100" :title="props.t('nav.export')">
+            <button @click="callAndClose(props.onExportMarkdown)" class="toolbar-btn text-indigo-600 hover:bg-indigo-50 border-indigo-100">
                 <Download class="w-4 h-4" />
                 <span>{{ props.t('nav.export') }}</span>
             </button>

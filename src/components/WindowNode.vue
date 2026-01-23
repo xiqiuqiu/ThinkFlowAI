@@ -151,13 +151,12 @@ const handleBlur = () => {
                     v-if="props.data.imageUrl"
                     class="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center gap-2"
                 >
-                    <button class="p-2 bg-white/20 hover:bg-white/40 rounded-full backdrop-blur-md transition-all" :title="props.t('node.view')">
+                    <button class="p-2 bg-white/20 hover:bg-white/40 rounded-full backdrop-blur-md transition-all">
                         <Maximize2 class="w-4 h-4 text-white" :stroke-width="1.5" />
                     </button>
                     <button
                         @click.stop="props.generateNodeImage(props.id, props.data.label)"
                         class="p-2 bg-white/20 hover:bg-white/40 rounded-full backdrop-blur-md transition-all"
-                        :title="props.t('node.regenerate')"
                     >
                         <RefreshCw class="w-4 h-4 text-white" :stroke-width="1.5" />
                     </button>
@@ -193,7 +192,6 @@ const handleBlur = () => {
                                 : props.expandIdea({ id: props.id, data: props.data, position: getNodePosition(props.id) })
                         "
                         class="p-1 hover:bg-red-100 rounded transition-colors"
-                        :title="props.t('common.error.retry')"
                     >
                         <RefreshCw class="w-3 h-3 text-red-600" :stroke-width="1.5" />
                     </button>
@@ -210,7 +208,7 @@ const handleBlur = () => {
                     </div>
 
                     <div class="flex items-center gap-2">
-                        <button @click.stop="props.deepDive(props.id, props.data.label)" class="action-btn text-orange-500 hover:bg-orange-50" :title="props.t('node.deepDive')">
+                        <button @click.stop="props.deepDive(props.id, props.data.label)" class="action-btn text-orange-500 hover:bg-orange-50">
                             <BookOpen class="w-2.5 h-2.5" :stroke-width="1.5" />
                             <span>{{ props.t('node.deepDive') }}</span>
                         </button>

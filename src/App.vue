@@ -6,63 +6,65 @@
  */
 
 // i18n：提供 t/locale，并把 locale 传入业务层做持久化
-import { useI18n } from 'vue-i18n'
+import { useI18n } from "vue-i18n";
 
 // 画布：VueFlow 与可选插件
-import { VueFlow } from '@vue-flow/core'
-import { Background, BackgroundVariant } from '@vue-flow/background'
-import { Controls, ControlButton } from '@vue-flow/controls'
-import { MiniMap } from '@vue-flow/minimap'
-import { Maximize, Minimize, X } from 'lucide-vue-next'
+import { VueFlow } from "@vue-flow/core";
+import { Background, BackgroundVariant } from "@vue-flow/background";
+import { Controls, ControlButton } from "@vue-flow/controls";
+import { MiniMap } from "@vue-flow/minimap";
+import { Maximize, Minimize, X } from "lucide-vue-next";
 
 // VueFlow 内置样式（必须引入，否则组件样式缺失）
-import '@vue-flow/core/dist/style.css'
-import '@vue-flow/core/dist/theme-default.css'
-import '@vue-flow/minimap/dist/style.css'
-import '@vue-flow/controls/dist/style.css'
+import "@vue-flow/core/dist/style.css";
+import "@vue-flow/core/dist/theme-default.css";
+import "@vue-flow/minimap/dist/style.css";
+import "@vue-flow/controls/dist/style.css";
 
 // 页面 UI 子组件
-import BottomBar from './components/BottomBar.vue'
-import ImagePreviewModal from './components/ImagePreviewModal.vue'
-import ResetConfirmModal from './components/ResetConfirmModal.vue'
-import SettingsModal from './components/SettingsModal.vue'
-import SummaryModal from './components/SummaryModal.vue'
-import TopNav from './components/TopNav.vue'
-import SideNav from './components/SideNav.vue'
-import WindowNode from './components/WindowNode.vue'
-import StickyNoteNode from './components/StickyNoteNode.vue'
-import GraphChatSidebar from './components/GraphChatSidebar.vue'
+import BottomBar from "./components/BottomBar.vue";
+import ImagePreviewModal from "./components/ImagePreviewModal.vue";
+import ResetConfirmModal from "./components/ResetConfirmModal.vue";
+import SettingsModal from "./components/SettingsModal.vue";
+import SummaryModal from "./components/SummaryModal.vue";
+import TopNav from "./components/TopNav.vue";
+import SideNav from "./components/SideNav.vue";
+import WindowNode from "./components/WindowNode.vue";
+import StickyNoteNode from "./components/StickyNoteNode.vue";
+import GraphChatSidebar from "./components/GraphChatSidebar.vue";
 
 // 业务层：统一的状态与动作入口
-import { useThinkFlow } from './composables/useThinkFlow'
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { useThinkFlow } from "./composables/useThinkFlow";
+import { computed, ref, onMounted, onUnmounted } from "vue";
 
-const { t, locale } = useI18n()
+const { t, locale } = useI18n();
 
 /**
  * 全屏控制逻辑
  */
-const isFullscreen = ref(false)
+const isFullscreen = ref(false);
 
 const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(err => {
-            console.error(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`)
-        })
-    } else {
-        if (document.exitFullscreen) {
-            document.exitFullscreen()
-        }
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch((err) => {
+      console.error(
+        `Error attempting to enable full-screen mode: ${err.message} (${err.name})`,
+      );
+    });
+  } else {
+    if (document.exitFullscreen) {
+      document.exitFullscreen();
     }
-}
+  }
+};
 
 const handleFullscreenChange = () => {
-    isFullscreen.value = !!document.fullscreenElement
-    // 如果手动退出了全屏，且当前还在演示模式，则同步退出演示模式
-    if (!document.fullscreenElement && isPresenting.value) {
-        _togglePresentation()
-    }
-}
+  isFullscreen.value = !!document.fullscreenElement;
+  // 如果手动退出了全屏，且当前还在演示模式，则同步退出演示模式
+  if (!document.fullscreenElement && isPresenting.value) {
+    _togglePresentation();
+  }
+};
 
 /**
  * 从业务层拿到全局状态与动作。
@@ -71,466 +73,532 @@ const handleFullscreenChange = () => {
  * - App.vue 只负责把这些能力传给对应 UI 组件
  */
 const {
-    apiConfig,
-    showSettings,
-    ideaInput,
-    isLoading,
-    previewImageUrl,
-    showResetConfirm,
-    showSummaryModal,
-    isSummarizing,
-    summaryContent,
-    panOnDrag,
-    isSpacePressed,
-    config,
-    flowNodes,
-    activeNodeId,
-    activePath,
-    updateNode,
-    fitView,
-    resetLayout,
-    centerRoot,
-    handleNodeDrag,
-    alignmentGuides,
-    viewport,
-    toggleSubtreeCollapse,
-    isSubtreeCollapsed,
-    startNewSession,
-    executeReset,
-    generateSummary,
-    exportMarkdown,
-    generateNodeImage,
-    deepDive,
-    expandIdea,
-    aiStyle,
-    isPresenting,
-    togglePresentation: _togglePresentation,
-    nextPresentationNode,
-    prevPresentationNode,
-    searchQuery,
-    searchResults,
-    focusNode,
-    showChatSidebar,
-    isChatting,
-    graphChatMessages,
-    addStickyNote,
-    sendGraphChatMessage,
-    removeNodes
-} = useThinkFlow({ t, locale })
+  apiConfig,
+  showSettings,
+  ideaInput,
+  isLoading,
+  previewImageUrl,
+  showResetConfirm,
+  showSummaryModal,
+  isSummarizing,
+  summaryContent,
+  panOnDrag,
+  isSpacePressed,
+  config,
+  flowNodes,
+  activeNodeId,
+  activePath,
+  updateNode,
+  fitView,
+  resetLayout,
+  centerRoot,
+  handleNodeDrag,
+  alignmentGuides,
+  viewport,
+  toggleSubtreeCollapse,
+  isSubtreeCollapsed,
+  startNewSession,
+  executeReset,
+  generateSummary,
+  exportMarkdown,
+  generateNodeImage,
+  deepDive,
+  expandIdea,
+  aiStyle,
+  isPresenting,
+  togglePresentation: _togglePresentation,
+  nextPresentationNode,
+  prevPresentationNode,
+  searchQuery,
+  searchResults,
+  focusNode,
+  showChatSidebar,
+  isChatting,
+  graphChatMessages,
+  addStickyNote,
+  sendGraphChatMessage,
+  removeNodes,
+  deleteNode,
+} = useThinkFlow({ t, locale });
 
 /**
  * 演示模式与全屏联动
  */
 const togglePresentation = () => {
-    _togglePresentation()
-    if (isPresenting.value) {
-        // 进入演示模式 -> 开启全屏
-        if (!document.fullscreenElement) {
-            document.documentElement.requestFullscreen().catch(err => {
-                console.error(`Error attempting to enable full-screen mode: ${err.message}`)
-            })
-        }
-    } else {
-        // 退出演示模式 -> 退出全屏
-        if (document.fullscreenElement) {
-            document.exitFullscreen().catch(err => {
-                console.error(`Error attempting to exit full-screen mode: ${err.message}`)
-            })
-        }
+  _togglePresentation();
+  if (isPresenting.value) {
+    // 进入演示模式 -> 开启全屏
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch((err) => {
+        console.error(
+          `Error attempting to enable full-screen mode: ${err.message}`,
+        );
+      });
     }
-}
+  } else {
+    // 退出演示模式 -> 退出全屏
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch((err) => {
+        console.error(
+          `Error attempting to exit full-screen mode: ${err.message}`,
+        );
+      });
+    }
+  }
+};
 
 /**
  * 演示模式键盘监听
  */
 const handlePresentationKeydown = (e: KeyboardEvent) => {
-    if (!isPresenting.value) return
-    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-        nextPresentationNode()
-    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-        prevPresentationNode()
-    } else if (e.key === 'Escape') {
-        togglePresentation()
-    }
-}
+  if (!isPresenting.value) return;
+  if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+    nextPresentationNode();
+  } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+    prevPresentationNode();
+  } else if (e.key === "Escape") {
+    togglePresentation();
+  }
+};
 
 onMounted(() => {
-    document.addEventListener('fullscreenchange', handleFullscreenChange)
-    window.addEventListener('keydown', handlePresentationKeydown)
-})
+  document.addEventListener("fullscreenchange", handleFullscreenChange);
+  window.addEventListener("keydown", handlePresentationKeydown);
+});
 
 onUnmounted(() => {
-    document.removeEventListener('fullscreenchange', handleFullscreenChange)
-    window.removeEventListener('keydown', handlePresentationKeydown)
-})
+  document.removeEventListener("fullscreenchange", handleFullscreenChange);
+  window.removeEventListener("keydown", handlePresentationKeydown);
+});
 
 const verticalGuideStyle = computed(() => {
-    const x = alignmentGuides.value.x
-    if (x == null) return null
-    const screenX = x * viewport.value.zoom + viewport.value.x
-    return { left: `${screenX}px` }
-})
+  const x = alignmentGuides.value.x;
+  if (x == null) return null;
+  const screenX = x * viewport.value.zoom + viewport.value.x;
+  return { left: `${screenX}px` };
+});
 
 const horizontalGuideStyle = computed(() => {
-    const y = alignmentGuides.value.y
-    if (y == null) return null
-    const screenY = y * viewport.value.zoom + viewport.value.y
-    return { top: `${screenY}px` }
-})
+  const y = alignmentGuides.value.y;
+  if (y == null) return null;
+  const screenY = y * viewport.value.zoom + viewport.value.y;
+  return { top: `${screenY}px` };
+});
 
 /**
  * 切换语言（zh <-> en）
  */
 const toggleLocale = () => {
-    locale.value = locale.value === 'zh' ? 'en' : 'zh'
-}
+  locale.value = locale.value === "zh" ? "en" : "zh";
+};
 
 /**
  * 视图适配：缩放到当前内容的合适视野
  */
 const fitToView = () => {
-    fitView({ padding: 0.2, duration: 800 })
-}
+  fitView({ padding: 0.2, duration: 800 });
+};
 </script>
 
 <template>
-    <div class="h-screen w-screen bg-white font-mono text-slate-800 relative overflow-hidden flex flex-col selection:bg-orange-100">
-        <TopNav
-            v-if="!isPresenting"
-            :t="t"
-            :locale="locale"
-            :config="config"
-            :onFit="fitToView"
-            :onResetLayout="resetLayout"
-            :onCenterRoot="centerRoot"
-            :onStartNewSession="startNewSession"
-            :onGenerateSummary="generateSummary"
-            :onExportMarkdown="exportMarkdown"
-            :onOpenSettings="() => (showSettings = true)"
-            :aiStyle="aiStyle"
-            :onToggleAiStyle="() => (aiStyle = aiStyle === 'creative' ? 'precise' : 'creative')"
-            :isPresenting="isPresenting"
-            :onTogglePresentation="togglePresentation"
-            :searchQuery="searchQuery"
-            :onUpdateSearchQuery="val => (searchQuery = val)"
-            :searchResults="searchResults"
-            :onFocusNode="focusNode"
-            :onToggleChat="() => (showChatSidebar = !showChatSidebar)"
-            @toggle-locale="toggleLocale"
-        />
+  <div
+    class="h-screen w-screen bg-white font-mono text-slate-800 relative overflow-hidden flex flex-col selection:bg-orange-100"
+  >
+    <TopNav
+      v-if="!isPresenting"
+      :t="t"
+      :locale="locale"
+      :config="config"
+      :onFit="fitToView"
+      :onResetLayout="resetLayout"
+      :onCenterRoot="centerRoot"
+      :onStartNewSession="startNewSession"
+      :onGenerateSummary="generateSummary"
+      :onExportMarkdown="exportMarkdown"
+      :onOpenSettings="() => (showSettings = true)"
+      :aiStyle="aiStyle"
+      :onToggleAiStyle="
+        () => (aiStyle = aiStyle === 'creative' ? 'precise' : 'creative')
+      "
+      :isPresenting="isPresenting"
+      :onTogglePresentation="togglePresentation"
+      :searchQuery="searchQuery"
+      :onUpdateSearchQuery="(val) => (searchQuery = val)"
+      :searchResults="searchResults"
+      :onFocusNode="focusNode"
+      :onToggleChat="() => (showChatSidebar = !showChatSidebar)"
+      @toggle-locale="toggleLocale"
+    />
 
-        <SideNav
-            v-if="!isPresenting"
-            :t="t"
-            :locale="locale"
-            :config="config"
-            :onFit="fitToView"
-            :onResetLayout="resetLayout"
-            :onCenterRoot="centerRoot"
-            :onAddStickyNote="addStickyNote"
-        />
+    <SideNav
+      v-if="!isPresenting"
+      :t="t"
+      :locale="locale"
+      :config="config"
+      :onFit="fitToView"
+      :onResetLayout="resetLayout"
+      :onCenterRoot="centerRoot"
+      :onAddStickyNote="addStickyNote"
+    />
 
-        <div class="flex-grow relative">
-            <!-- 演示模式退出提示 -->
-            <div
-                v-if="isPresenting"
-                class="absolute top-6 left-1/2 -translate-x-1/2 z-[100] bg-black/80 backdrop-blur-md text-white px-6 py-3 rounded-full flex items-center gap-4 shadow-2xl animate-bounce-in"
-            >
-                <span class="text-xs font-bold tracking-widest uppercase">{{ t('nav.presentationMode') }}</span>
-                <div class="h-4 w-px bg-white/20"></div>
-                <div class="flex items-center gap-2">
-                    <kbd class="px-2 py-1 bg-white/10 rounded text-[10px]">←/→</kbd>
-                    <span class="text-[10px] opacity-60">{{ t('nav.presentationNav') }}</span>
-                </div>
-                <button @click="togglePresentation" class="ml-2 p-1 hover:bg-white/20 rounded-full transition-colors">
-                    <X class="w-4 h-4" />
-                </button>
-            </div>
-
-            <VueFlow
-                :default-edge-options="{ type: config.edgeType }"
-                :fit-view-on-init="false"
-                :min-zoom="0.05"
-                :max-zoom="4"
-                class="bg-white"
-                :class="{ 'space-pressed': isSpacePressed, 'presentation-mode': isPresenting }"
-                :pan-on-drag="panOnDrag"
-                :selection-key-code="'Shift'"
-                :snap-to-grid="config.snapToGrid"
-                :snap-grid="config.snapGrid"
-                @node-drag="handleNodeDrag"
-            >
-                <Background
-                    :variant="config.backgroundVariant"
-                    :pattern-color="config.backgroundVariant === BackgroundVariant.Dots ? '#94a3b8' : '#f1f5f9'"
-                    :gap="config.backgroundVariant === BackgroundVariant.Dots ? 16 : 24"
-                    :size="config.backgroundVariant === BackgroundVariant.Dots ? 1.2 : 0.5"
-                />
-                <Controls v-if="false" :show-fullscreen="false" :show-fit-view="false">
-                    <ControlButton @click="toggleFullscreen">
-                        <component :is="isFullscreen ? Minimize : Maximize" class="w-4 h-4 text-slate-500" />
-                    </ControlButton>
-                </Controls>
-                <MiniMap v-if="config.showMiniMap" pannable zoomable />
-
-                <template #node-window="{ id, data, selected }">
-                    <WindowNode
-                        :id="id"
-                        :data="data"
-                        :selected="selected"
-                        :t="t"
-                        :config="config"
-                        :fitView="fitView"
-                        :activeNodeId="activeNodeId"
-                        :activePath="activePath"
-                        :flowNodes="flowNodes"
-                        :updateNode="updateNode"
-                        :deepDive="deepDive"
-                        :generateNodeImage="generateNodeImage"
-                        :expandIdea="expandIdea"
-                        :toggleSubtreeCollapse="toggleSubtreeCollapse"
-                        :isSubtreeCollapsed="isSubtreeCollapsed"
-                        @preview="previewImageUrl = $event"
-                    />
-                </template>
-
-                <template #node-sticky="{ id, data, selected }">
-                    <StickyNoteNode :id="id" :data="data" :selected="selected" :t="t" :config="config" :updateNode="updateNode" :removeNodes="removeNodes" />
-                </template>
-            </VueFlow>
-
-            <div class="absolute inset-0 pointer-events-none z-20">
-                <div v-if="config.showAlignmentGuides && verticalGuideStyle" class="absolute top-0 bottom-0 w-px bg-orange-300/70" :style="verticalGuideStyle"></div>
-                <div v-if="config.showAlignmentGuides && horizontalGuideStyle" class="absolute left-0 right-0 h-px bg-orange-300/70" :style="horizontalGuideStyle"></div>
-            </div>
-
-            <SettingsModal :show="showSettings" :t="t" :apiConfig="apiConfig" @close="showSettings = false" />
-            <ImagePreviewModal :url="previewImageUrl" @close="previewImageUrl = null" />
-            <ResetConfirmModal :show="showResetConfirm" :t="t" @close="showResetConfirm = false" @confirm="executeReset" />
-            <SummaryModal :show="showSummaryModal" :t="t" :isSummarizing="isSummarizing" :summaryContent="summaryContent" @close="showSummaryModal = false" />
-
-            <GraphChatSidebar
-                :show="showChatSidebar"
-                :t="t"
-                :isChatting="isChatting"
-                :messages="graphChatMessages"
-                :onSendMessage="sendGraphChatMessage"
-                :onClose="() => (showChatSidebar = false)"
-            />
+    <div class="flex-grow relative">
+      <!-- 演示模式退出提示 -->
+      <div
+        v-if="isPresenting"
+        class="absolute top-6 left-1/2 -translate-x-1/2 z-[100] bg-black/80 backdrop-blur-md text-white px-6 py-3 rounded-full flex items-center gap-4 shadow-2xl animate-bounce-in"
+      >
+        <span class="text-xs font-bold tracking-widest uppercase">{{
+          t("nav.presentationMode")
+        }}</span>
+        <div class="h-4 w-px bg-white/20"></div>
+        <div class="flex items-center gap-2">
+          <kbd class="px-2 py-1 bg-white/10 rounded text-[10px]">←/→</kbd>
+          <span class="text-[10px] opacity-60">{{
+            t("nav.presentationNav")
+          }}</span>
         </div>
+        <button
+          @click="togglePresentation"
+          class="ml-2 p-1 hover:bg-white/20 rounded-full transition-colors"
+        >
+          <X class="w-4 h-4" />
+        </button>
+      </div>
 
-        <BottomBar
-            v-if="!isPresenting"
-            :t="t"
-            :isLoading="isLoading"
-            v-model="ideaInput"
-            :aiStyle="aiStyle"
-            :onToggleAiStyle="() => (aiStyle = aiStyle === 'creative' ? 'precise' : 'creative')"
-            @expand="expandIdea"
+      <VueFlow
+        :default-edge-options="{ type: config.edgeType }"
+        :fit-view-on-init="false"
+        :min-zoom="0.05"
+        :max-zoom="4"
+        class="bg-white"
+        :class="{
+          'space-pressed': isSpacePressed,
+          'presentation-mode': isPresenting,
+        }"
+        :pan-on-drag="panOnDrag"
+        :selection-key-code="'Shift'"
+        :snap-to-grid="config.snapToGrid"
+        :snap-grid="config.snapGrid"
+        @node-drag="handleNodeDrag"
+      >
+        <Background
+          :variant="config.backgroundVariant"
+          :pattern-color="
+            config.backgroundVariant === BackgroundVariant.Dots
+              ? '#94a3b8'
+              : '#f1f5f9'
+          "
+          :gap="config.backgroundVariant === BackgroundVariant.Dots ? 16 : 24"
+          :size="
+            config.backgroundVariant === BackgroundVariant.Dots ? 1.2 : 0.5
+          "
         />
+        <Controls v-if="false" :show-fullscreen="false" :show-fit-view="false">
+          <ControlButton @click="toggleFullscreen">
+            <component
+              :is="isFullscreen ? Minimize : Maximize"
+              class="w-4 h-4 text-slate-500"
+            />
+          </ControlButton>
+        </Controls>
+        <MiniMap v-if="config.showMiniMap" pannable zoomable />
+
+        <template #node-window="{ id, data, selected }">
+          <WindowNode
+            :id="id"
+            :data="data"
+            :selected="selected"
+            :t="t"
+            :config="config"
+            :fitView="fitView"
+            :activeNodeId="activeNodeId"
+            :activePath="activePath"
+            :flowNodes="flowNodes"
+            :updateNode="updateNode"
+            :deepDive="deepDive"
+            :generateNodeImage="generateNodeImage"
+            :expandIdea="expandIdea"
+            :toggleSubtreeCollapse="toggleSubtreeCollapse"
+            :isSubtreeCollapsed="isSubtreeCollapsed"
+            :deleteNode="deleteNode"
+            @preview="previewImageUrl = $event"
+          />
+        </template>
+
+        <template #node-sticky="{ id, data, selected }">
+          <StickyNoteNode
+            :id="id"
+            :data="data"
+            :selected="selected"
+            :t="t"
+            :config="config"
+            :updateNode="updateNode"
+            :removeNodes="removeNodes"
+          />
+        </template>
+      </VueFlow>
+
+      <div class="absolute inset-0 pointer-events-none z-20">
+        <div
+          v-if="config.showAlignmentGuides && verticalGuideStyle"
+          class="absolute top-0 bottom-0 w-px bg-orange-300/70"
+          :style="verticalGuideStyle"
+        ></div>
+        <div
+          v-if="config.showAlignmentGuides && horizontalGuideStyle"
+          class="absolute left-0 right-0 h-px bg-orange-300/70"
+          :style="horizontalGuideStyle"
+        ></div>
+      </div>
+
+      <SettingsModal
+        :show="showSettings"
+        :t="t"
+        :apiConfig="apiConfig"
+        @close="showSettings = false"
+      />
+      <ImagePreviewModal
+        :url="previewImageUrl"
+        @close="previewImageUrl = null"
+      />
+      <ResetConfirmModal
+        :show="showResetConfirm"
+        :t="t"
+        @close="showResetConfirm = false"
+        @confirm="executeReset"
+      />
+      <SummaryModal
+        :show="showSummaryModal"
+        :t="t"
+        :isSummarizing="isSummarizing"
+        :summaryContent="summaryContent"
+        @close="showSummaryModal = false"
+      />
+
+      <GraphChatSidebar
+        :show="showChatSidebar"
+        :t="t"
+        :isChatting="isChatting"
+        :messages="graphChatMessages"
+        :onSendMessage="sendGraphChatMessage"
+        :onClose="() => (showChatSidebar = false)"
+      />
     </div>
+
+    <BottomBar
+      v-if="!isPresenting"
+      :t="t"
+      :isLoading="isLoading"
+      v-model="ideaInput"
+      :aiStyle="aiStyle"
+      :onToggleAiStyle="
+        () => (aiStyle = aiStyle === 'creative' ? 'precise' : 'creative')
+      "
+      @expand="expandIdea"
+    />
+  </div>
 </template>
 
 <style>
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap");
 
 body {
-    margin: 0;
-    overflow: hidden;
-    -webkit-font-smoothing: antialiased;
+  margin: 0;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
 }
 
 .font-mono {
-    font-family: 'JetBrains Mono', monospace;
+  font-family: "JetBrains Mono", monospace;
 }
 
 .toolbar-btn {
-    @apply flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-black tracking-widest transition-all active:scale-95 uppercase;
+  @apply flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-black tracking-widest transition-all active:scale-95 uppercase;
 }
 
 .toolbar-btn:hover {
-    @apply border-current shadow-sm;
+  @apply border-current shadow-sm;
 }
 
 /* Tooltip Styles */
 .custom-tooltip {
-    @apply hidden md:block absolute px-2 py-1 bg-slate-900 text-white text-[10px] font-bold tracking-widest uppercase rounded opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-[100] shadow-xl pointer-events-none;
+  @apply hidden md:block absolute px-2 py-1 bg-slate-900 text-white text-[10px] font-bold tracking-widest uppercase rounded opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-[100] shadow-xl pointer-events-none;
 }
 
 .custom-tooltip-right {
-    @apply left-full ml-3 top-1/2 -translate-y-1/2 translate-x-[-10px] group-hover:translate-x-0;
+  @apply left-full ml-3 top-1/2 -translate-y-1/2 translate-x-[-10px] group-hover:translate-x-0;
 }
 
 .custom-tooltip-bottom {
-    @apply top-full mt-2 left-1/2 -translate-x-1/2 translate-y-[-10px] group-hover:translate-y-0;
+  @apply top-full mt-2 left-1/2 -translate-x-1/2 translate-y-[-10px] group-hover:translate-y-0;
 }
 
 .custom-tooltip-right::before {
-    content: '';
-    @apply absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-slate-900;
+  content: "";
+  @apply absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-slate-900;
 }
 
 .custom-tooltip-bottom::before {
-    content: '';
-    @apply absolute bottom-full left-1/2 -translate-x-1/2 border-4 border-transparent border-b-slate-900;
+  content: "";
+  @apply absolute bottom-full left-1/2 -translate-x-1/2 border-4 border-transparent border-b-slate-900;
 }
 
 .toolbar-select {
-    @apply px-3 py-1.5 bg-slate-50 border border-slate-100 rounded-lg text-[10px] font-black tracking-widest text-slate-500 outline-none cursor-pointer hover:border-slate-200 transition-all uppercase;
+  @apply px-3 py-1.5 bg-slate-50 border border-slate-100 rounded-lg text-[10px] font-black tracking-widest text-slate-500 outline-none cursor-pointer hover:border-slate-200 transition-all uppercase;
 }
 
 .nav-btn {
-    @apply flex items-center gap-1 px-3 py-1 bg-white border border-slate-200 rounded-md text-xs font-medium text-slate-600 hover:border-slate-300 hover:shadow-sm transition-all;
+  @apply flex items-center gap-1 px-3 py-1 bg-white border border-slate-200 rounded-md text-xs font-medium text-slate-600 hover:border-slate-300 hover:shadow-sm transition-all;
 }
 
 /* VueFlow Custom Node Styles */
 .window-node {
-    @apply w-[280px] bg-white rounded-xl border border-slate-200 shadow-xl overflow-hidden transition-all duration-300;
+  @apply w-[280px] bg-white rounded-xl border border-slate-200 shadow-xl overflow-hidden transition-all duration-300;
 }
 
 .window-node:hover {
-    @apply shadow-2xl shadow-orange-100 -translate-y-1 border-orange-200;
+  @apply shadow-2xl shadow-orange-100 -translate-y-1 border-orange-200;
 }
 
 .window-header {
-    @apply bg-slate-50/80 px-3 py-1.5 border-b border-slate-100 flex items-center justify-between;
+  @apply bg-slate-50/80 px-3 py-1.5 border-b border-slate-100 flex items-center justify-between;
 }
 
 .window-title {
-    @apply text-[9px] font-bold text-slate-300 tracking-widest uppercase;
+  @apply text-[9px] font-bold text-slate-300 tracking-widest uppercase;
 }
 
 .window-content {
-    @apply p-4;
+  @apply p-4;
 }
 
 .action-btn {
-    @apply flex items-center gap-1 px-2 py-1 rounded-md text-[9px] font-bold transition-all active:scale-95 uppercase tracking-tighter whitespace-nowrap border border-transparent;
+  @apply flex items-center gap-1 px-2 py-1 rounded-md text-[9px] font-bold transition-all active:scale-95 uppercase tracking-tighter whitespace-nowrap border border-transparent;
 }
 
 .action-btn:hover {
-    @apply border-current bg-opacity-10;
+  @apply border-current bg-opacity-10;
 }
 
 .custom-scrollbar::-webkit-scrollbar {
-    width: 4px;
+  width: 4px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
-    @apply bg-transparent;
+  @apply bg-transparent;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-    @apply bg-slate-200 rounded-full hover:bg-slate-300 transition-colors;
+  @apply bg-slate-200 rounded-full hover:bg-slate-300 transition-colors;
 }
 
 /* VueFlow Overrides */
 .vue-flow__node-window {
-    @apply p-0 border-none bg-transparent !important;
+  @apply p-0 border-none bg-transparent !important;
 }
 
 .vue-flow__node.selected {
-    z-index: 1000 !important;
+  z-index: 1000 !important;
 }
 
 .vue-flow__controls {
-    @apply !bg-white !border-slate-200 !shadow-xl !rounded-lg !left-4 md:!left-6 !bottom-28 md:!bottom-6 !transition-all;
+  @apply !bg-white !border-slate-200 !shadow-xl !rounded-lg !left-4 md:!left-6 !bottom-28 md:!bottom-6 !transition-all;
 }
 
 @media (max-width: 767px) {
-    .vue-flow__controls {
-        margin-left: 0 !important;
-        left: 1rem !important;
-    }
+  .vue-flow__controls {
+    margin-left: 0 !important;
+    left: 1rem !important;
+  }
 }
 
 .vue-flow__controls-button {
-    @apply !border-slate-100 !fill-slate-400 hover:!bg-slate-50 !transition-colors;
+  @apply !border-slate-100 !fill-slate-400 hover:!bg-slate-50 !transition-colors;
 }
 
 .vue-flow__minimap {
-    @apply !bg-white/80 !backdrop-blur-md !border-slate-200 !shadow-2xl !rounded-xl !overflow-hidden !transition-all;
-    display: none !important;
-    bottom: 130px !important;
-    right: 1rem !important;
-    width: 140px !important;
-    height: 100px !important;
-    margin: 0 !important;
+  @apply !bg-white/80 !backdrop-blur-md !border-slate-200 !shadow-2xl !rounded-xl !overflow-hidden !transition-all;
+  display: none !important;
+  bottom: 130px !important;
+  right: 1rem !important;
+  width: 140px !important;
+  height: 100px !important;
+  margin: 0 !important;
 }
 
 .vue-flow__minimap svg {
-    display: block !important;
-    width: 100% !important;
-    height: 100% !important;
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
 }
 
 @media (min-width: 768px) {
-    .vue-flow__minimap {
-        display: block !important;
-        bottom: 1.5rem !important;
-        right: 1.5rem !important;
-        width: 220px !important;
-        height: 160px !important;
-        margin: 0 !important;
-    }
+  .vue-flow__minimap {
+    display: block !important;
+    bottom: 1.5rem !important;
+    right: 1.5rem !important;
+    width: 220px !important;
+    height: 160px !important;
+    margin: 0 !important;
+  }
 }
 
 .vue-flow__minimap-mask {
-    @apply !fill-slate-500/5;
+  @apply !fill-slate-500/5;
 }
 
 .vue-flow__minimap-node {
-    @apply !fill-slate-200 !stroke-none;
+  @apply !fill-slate-200 !stroke-none;
 }
 
 /* Custom Controls for Space Dragging */
 .vue-flow__pane {
-    cursor: default;
+  cursor: default;
 }
 
 .vue-flow__pane.space-pressed {
-    cursor: grab;
+  cursor: grab;
 }
 
 .vue-flow__pane.space-pressed:active {
-    cursor: grabbing;
+  cursor: grabbing;
 }
 
 .vue-flow__background {
-    @apply !bg-white;
+  @apply !bg-white;
 }
 
 /* Animation */
 @keyframes spin-slow {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 input::placeholder {
-    @apply opacity-30;
+  @apply opacity-30;
 }
 
 input:focus::placeholder {
-    @apply opacity-10;
+  @apply opacity-10;
 }
 
 .line-clamp-3 {
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .no-scrollbar::-webkit-scrollbar {
-    display: none;
+  display: none;
 }
 
 .no-scrollbar {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 </style>

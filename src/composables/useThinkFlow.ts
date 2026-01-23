@@ -4,1416 +4,1766 @@
  * - 对外提供：页面与组件可直接调用的状态与动作（expand / deepDive / image / summary 等）
  */
 
-import { computed, nextTick, onMounted, reactive, ref, toRaw, watch, type Ref } from 'vue'
-import { MarkerType, Position, useVueFlow } from '@vue-flow/core'
-import { BackgroundVariant } from '@vue-flow/background'
-import { DEFAULT_CONFIG, API_KEY } from '../services/config'
+import {
+  computed,
+  nextTick,
+  onMounted,
+  reactive,
+  ref,
+  toRaw,
+  watch,
+  type Ref,
+} from "vue";
+import { MarkerType, Position, useVueFlow } from "@vue-flow/core";
+import { BackgroundVariant } from "@vue-flow/background";
+import { DEFAULT_CONFIG, API_KEY } from "../services/config";
 
 /**
  * i18n 翻译函数类型（等价于 vue-i18n 的 t）
  */
-type Translate = (key: string, params?: any) => string
+type Translate = (key: string, params?: any) => string;
 
 /**
  * 创建 ThinkFlow 的业务上下文。
  * @param t 国际化翻译函数
  * @param locale 当前语言（用于持久化语言选择）
  */
-export function useThinkFlow({ t, locale }: { t: Translate; locale: Ref<string> }) {
-    /**
-     * API 配置（支持默认/自定义两种模式）
-     * - 自定义模式写入 localStorage，刷新后仍保留
-     */
-    const apiConfig = reactive({
-        mode: localStorage.getItem('api_mode') || 'default',
-        chat: {
-            baseUrl: localStorage.getItem('chat_baseUrl') || '',
-            model: localStorage.getItem('chat_model') || '',
-            apiKey: localStorage.getItem('chat_apiKey') || ''
+export function useThinkFlow({
+  t,
+  locale,
+}: {
+  t: Translate;
+  locale: Ref<string>;
+}) {
+  /**
+   * API 配置（支持默认/自定义两种模式）
+   * - 自定义模式写入 localStorage，刷新后仍保留
+   */
+  const apiConfig = reactive({
+    mode: localStorage.getItem("api_mode") || "default",
+    chat: {
+      baseUrl: localStorage.getItem("chat_baseUrl") || "",
+      model: localStorage.getItem("chat_model") || "",
+      apiKey: localStorage.getItem("chat_apiKey") || "",
+    },
+    image: {
+      baseUrl: localStorage.getItem("image_baseUrl") || "",
+      model: localStorage.getItem("image_model") || "",
+      apiKey: localStorage.getItem("image_apiKey") || "",
+    },
+  });
+
+  /**
+   * 语言选择持久化（与 i18n/index.ts 中的初始化配合）
+   */
+  watch(
+    () => locale.value,
+    (newVal) => {
+      localStorage.setItem("language", newVal);
+    },
+  );
+
+  /**
+   * API 配置持久化：任何字段变化都会更新 localStorage
+   */
+  watch(
+    () => apiConfig,
+    (newVal) => {
+      localStorage.setItem("api_mode", newVal.mode);
+      localStorage.setItem("chat_baseUrl", newVal.chat.baseUrl);
+      localStorage.setItem("chat_model", newVal.chat.model);
+      localStorage.setItem("chat_apiKey", newVal.chat.apiKey);
+      localStorage.setItem("image_baseUrl", newVal.image.baseUrl);
+      localStorage.setItem("image_model", newVal.image.model);
+      localStorage.setItem("image_apiKey", newVal.image.apiKey);
+    },
+    { deep: true },
+  );
+
+  /**
+   * 设置弹窗开关（由顶部导航触发）
+   */
+  const showSettings = ref(false);
+
+  /**
+   * VueFlow 实例能力集合：节点/边增删改与视图控制
+   */
+  const {
+    addNodes,
+    addEdges,
+    setNodes,
+    setEdges,
+    nodes: flowNodes,
+    edges: flowEdges,
+    updateNode,
+    removeNodes,
+    removeEdges,
+    fitView,
+    viewport,
+    onNodeDragStart,
+    onNodeDrag,
+    onNodeDragStop,
+    project,
+  } = useVueFlow();
+
+  /**
+   * 全局输入与对话状态
+   */
+  const ideaInput = ref("");
+  const isLoading = ref(false);
+  const previewImageUrl = ref<string | null>(null);
+  const showResetConfirm = ref(false);
+  const showSummaryModal = ref(false);
+  const isSummarizing = ref(false);
+  const summaryContent = ref("");
+
+  /**
+   * AI 思考风格
+   * - creative: 发散模式 (默认)
+   * - precise: 严谨模式
+   */
+  const aiStyle = ref(localStorage.getItem("ai_style") || "creative");
+
+  watch(aiStyle, (val) => {
+    localStorage.setItem("ai_style", val);
+  });
+
+  /**
+   * 演示模式状态
+   */
+  const isPresenting = ref(false);
+  const presentationIndex = ref(-1);
+
+  /**
+   * 搜索状态
+   */
+  const searchQuery = ref("");
+  const searchResults = computed(() => {
+    if (!searchQuery.value.trim()) return [];
+    const q = searchQuery.value.toLowerCase();
+    return flowNodes.value.filter(
+      (n) =>
+        n.data.label?.toLowerCase().includes(q) ||
+        n.data.description?.toLowerCase().includes(q),
+    );
+  });
+
+  const focusNode = (nodeId: string) => {
+    const node = flowNodes.value.find((n) => n.id === nodeId);
+    if (node) {
+      setNodes(
+        flowNodes.value.map((n) => ({ ...n, selected: n.id === nodeId })),
+      );
+      fitView({ nodes: [nodeId], padding: 2, duration: 800 });
+    }
+  };
+
+  const nextPresentationNode = () => {
+    if (flowNodes.value.length === 0) return;
+    presentationIndex.value =
+      (presentationIndex.value + 1) % flowNodes.value.length;
+    focusNode(flowNodes.value[presentationIndex.value].id);
+  };
+
+  const prevPresentationNode = () => {
+    if (flowNodes.value.length === 0) return;
+    presentationIndex.value =
+      (presentationIndex.value - 1 + flowNodes.value.length) %
+      flowNodes.value.length;
+    focusNode(flowNodes.value[presentationIndex.value].id);
+  };
+
+  const togglePresentation = () => {
+    isPresenting.value = !isPresenting.value;
+    if (isPresenting.value) {
+      presentationIndex.value = 0;
+      if (flowNodes.value.length > 0) {
+        focusNode(flowNodes.value[0].id);
+      }
+    } else {
+      presentationIndex.value = -1;
+    }
+  };
+
+  const draggingNodeId = ref<string | null>(null);
+  const dragLastPositionByNodeId = new Map<string, { x: number; y: number }>();
+  const alignmentGuides = ref<{ x: number | null; y: number | null }>({
+    x: null,
+    y: null,
+  });
+
+  /**
+   * 交互：按住 Space 启用“抓手拖拽画布”
+   * - isSpacePressed 用于在 UI 层展示手型光标
+   * - panOnDrag 控制 VueFlow 的拖拽行为（按 Space 时总是允许拖拽画布）
+   */
+  const panOnDrag = ref(true);
+  const isSpacePressed = ref(false);
+
+  window.addEventListener("keydown", (e) => {
+    if (
+      e.code === "Space" &&
+      !["INPUT", "TEXTAREA"].includes((e.target as HTMLElement).tagName)
+    ) {
+      isSpacePressed.value = true;
+      panOnDrag.value = true;
+    }
+  });
+
+  window.addEventListener("keyup", (e) => {
+    if (e.code === "Space") {
+      isSpacePressed.value = false;
+    }
+  });
+
+  /**
+   * 用拖拽节点作为“当前激活节点”的一种来源，便于高亮路径/聚焦
+   */
+  onNodeDragStart((e) => {
+    draggingNodeId.value = e.node.id;
+    dragLastPositionByNodeId.set(e.node.id, {
+      x: e.node.position.x,
+      y: e.node.position.y,
+    });
+  });
+
+  /**
+   * 处理节点拖拽事件 (联动移动子节点)
+   */
+  const handleNodeDrag = (payload: any) => {
+    const node = payload?.node ?? payload;
+    if (!node?.id || !node?.position) return;
+
+    const draggedStoreNode = flowNodes.value.find((n) => n.id === node.id);
+    if (!draggedStoreNode) return;
+
+    if (config.snapToAlignment) {
+      const snapThreshold = 8;
+
+      const getNodeVisualInfo = (
+        n: any,
+        currentPos?: { x: number; y: number },
+      ) => {
+        const width = n.dimensions?.width ?? n.measured?.width ?? 280;
+        const height = n.dimensions?.height ?? n.measured?.height ?? 180;
+
+        // 核心逻辑：计算视觉缩放比例，与 WindowNode.vue 中的逻辑保持一致
+        let scale = 1.0;
+        if (activeNodeId.value) {
+          if (activePath.value.nodeIds.has(n.id)) {
+            // 在拖拽或处于活跃路径时，节点会放大 1.05
+            // 注意：WindowNode 中 focus 时是 1.1，但拖拽时通常 input 不会处于 focus 状态
+            scale = 1.05;
+          } else {
+            // 非活跃路径节点会缩小并变淡
+            scale = 0.98;
+          }
+        }
+
+        const x = currentPos?.x ?? n.position.x;
+        const y = currentPos?.y ?? n.position.y;
+
+        // 因为 CSS transform: scale 默认是从中心缩放，所以视觉上的起始点 (top-left) 会发生偏移
+        const visualWidth = width * scale;
+        const visualHeight = height * scale;
+        const offsetX = (visualWidth - width) / 2;
+        const offsetY = (visualHeight - height) / 2;
+
+        return {
+          width: visualWidth,
+          height: visualHeight,
+          x: x - offsetX,
+          y: y - offsetY,
+          scale,
+        };
+      };
+
+      const draggedInfo = getNodeVisualInfo(draggedStoreNode, {
+        x: node.position.x,
+        y: node.position.y,
+      });
+      const proposedX = node.position.x;
+      const proposedY = node.position.y;
+
+      // 使用视觉坐标进行对齐计算
+      const draggedAnchorsX = [
+        draggedInfo.x,
+        draggedInfo.x + draggedInfo.width / 2,
+        draggedInfo.x + draggedInfo.width,
+      ];
+      const draggedAnchorsY = [
+        draggedInfo.y,
+        draggedInfo.y + draggedInfo.height / 2,
+        draggedInfo.y + draggedInfo.height,
+      ];
+
+      let bestX: { delta: number; guide: number } | null = null;
+      let bestY: { delta: number; guide: number } | null = null;
+
+      for (const other of flowNodes.value) {
+        if (other.id === node.id) continue;
+        if (other.hidden) continue;
+
+        const otherInfo = getNodeVisualInfo(other);
+        const otherAnchorsX = [
+          otherInfo.x,
+          otherInfo.x + otherInfo.width / 2,
+          otherInfo.x + otherInfo.width,
+        ];
+        const otherAnchorsY = [
+          otherInfo.y,
+          otherInfo.y + otherInfo.height / 2,
+          otherInfo.y + otherInfo.height,
+        ];
+
+        for (const ox of otherAnchorsX) {
+          for (const ax of draggedAnchorsX) {
+            const delta = ox - ax;
+            const absDelta = Math.abs(delta);
+            if (
+              absDelta <= snapThreshold &&
+              (!bestX || absDelta < Math.abs(bestX.delta))
+            ) {
+              bestX = { delta, guide: ox };
+            }
+          }
+        }
+
+        for (const oy of otherAnchorsY) {
+          for (const ay of draggedAnchorsY) {
+            const delta = oy - ay;
+            const absDelta = Math.abs(delta);
+            if (
+              absDelta <= snapThreshold &&
+              (!bestY || absDelta < Math.abs(bestY.delta))
+            ) {
+              bestY = { delta, guide: oy };
+            }
+          }
+        }
+      }
+
+      const snappedX = bestX ? proposedX + bestX.delta : proposedX;
+      const snappedY = bestY ? proposedY + bestY.delta : proposedY;
+
+      alignmentGuides.value = config.showAlignmentGuides
+        ? { x: bestX?.guide ?? null, y: bestY?.guide ?? null }
+        : { x: null, y: null };
+
+      if (snappedX !== proposedX || snappedY !== proposedY) {
+        draggedStoreNode.position = { x: snappedX, y: snappedY };
+        node.position = { x: snappedX, y: snappedY };
+      }
+    } else {
+      alignmentGuides.value = { x: null, y: null };
+    }
+
+    if (!config.hierarchicalDragging) return;
+
+    const lastPosition = dragLastPositionByNodeId.get(node.id);
+    if (!lastPosition) {
+      const fallbackDelta = payload?.delta;
+      dragLastPositionByNodeId.set(node.id, {
+        x: node.position.x,
+        y: node.position.y,
+      });
+      if (
+        fallbackDelta &&
+        typeof fallbackDelta.x === "number" &&
+        typeof fallbackDelta.y === "number"
+      ) {
+        const descendantIds = getDescendantIds(node.id);
+        if (descendantIds.size === 0) return;
+
+        const selectedNodeIds = new Set(
+          flowNodes.value.filter((n) => n.selected).map((n) => n.id),
+        );
+        descendantIds.forEach((id) => {
+          if (!selectedNodeIds.has(id)) {
+            const targetNode = flowNodes.value.find((n) => n.id === id);
+            if (targetNode) {
+              targetNode.position = {
+                x: targetNode.position.x + fallbackDelta.x,
+                y: targetNode.position.y + fallbackDelta.y,
+              };
+            }
+          }
+        });
+      }
+      return;
+    }
+
+    const dx = node.position.x - lastPosition.x;
+    const dy = node.position.y - lastPosition.y;
+    if (dx === 0 && dy === 0) return;
+
+    dragLastPositionByNodeId.set(node.id, {
+      x: node.position.x,
+      y: node.position.y,
+    });
+
+    const descendantIds = getDescendantIds(node.id);
+    if (descendantIds.size === 0) return;
+
+    // 获取当前所有选中的节点，避免重复位移
+    const selectedNodeIds = new Set(
+      flowNodes.value.filter((n) => n.selected).map((n) => n.id),
+    );
+
+    // 批量更新子节点位置
+    descendantIds.forEach((id) => {
+      if (!selectedNodeIds.has(id)) {
+        const targetNode = flowNodes.value.find((n) => n.id === id);
+        if (targetNode) {
+          // 直接更新位置对象，确保 Vue 能够检测到深层变化
+          targetNode.position = {
+            x: targetNode.position.x + dx,
+            y: targetNode.position.y + dy,
+          };
+        }
+      }
+    });
+  };
+
+  onNodeDrag(handleNodeDrag);
+
+  onNodeDragStop((e) => {
+    draggingNodeId.value = null;
+    if (e?.node?.id) {
+      dragLastPositionByNodeId.delete(e.node.id);
+    }
+    alignmentGuides.value = { x: null, y: null };
+  });
+
+  /**
+   * 当前激活节点 id
+   * 优先级：正在展开的节点 > 选中的节点 > 正在拖拽的节点
+   */
+  const activeNodeId = computed(() => {
+    const expandingNode = flowNodes.value.find((n) => n.data.isExpanding);
+    const selectedNode = flowNodes.value.find((n) => n.selected);
+    return expandingNode?.id || selectedNode?.id || draggingNodeId.value;
+  });
+
+  /**
+   * 获取节点的所有后代节点 ID (迭代实现，更健壮)
+   */
+  const getDescendantIds = (nodeId: string): Set<string> => {
+    const descendants = new Set<string>();
+    const stack = [nodeId];
+    const edges = flowEdges.value;
+
+    while (stack.length > 0) {
+      const currentId = stack.pop()!;
+      for (const edge of edges) {
+        if (edge.source === currentId) {
+          if (!descendants.has(edge.target)) {
+            descendants.add(edge.target);
+            stack.push(edge.target);
+          }
+        }
+      }
+    }
+    return descendants;
+  };
+
+  /**
+   * 删除指定节点的所有后代节点
+   * 用于在重新扩展某个节点时，清空其原有的子树
+   */
+  const removeDescendants = (nodeId: string) => {
+    const descendantIds = getDescendantIds(nodeId);
+    if (descendantIds.size > 0) {
+      removeNodes(Array.from(descendantIds));
+    }
+  };
+
+  /**
+   * 删除指定节点及其所有后代节点
+   * 用于用户手动删除子节点
+   */
+  const deleteNode = (nodeId: string) => {
+    // 不允许删除根节点
+    const node = flowNodes.value.find((n) => n.id === nodeId);
+    if (!node || node.data.type === "root") return;
+
+    // 先删除所有后代节点
+    removeDescendants(nodeId);
+    // 再删除自身
+    removeNodes([nodeId]);
+  };
+
+  /**
+   * 当前激活路径（节点集合 + 边集合）
+   * - 向上：从激活节点回溯到根
+   * - 向下：包含激活节点的所有后代
+   * 用于：
+   * - 节点高亮/弱化
+   * - 边高亮/动画
+   */
+  const activePath = computed(() => {
+    const nodeIds = new Set<string>();
+    const edgeIds = new Set<string>();
+
+    if (!activeNodeId.value) return { nodeIds, edgeIds };
+
+    const targetId = activeNodeId.value;
+    nodeIds.add(targetId);
+
+    let currentId = targetId;
+    while (currentId) {
+      const edge = flowEdges.value.find((e) => e.target === currentId);
+      if (edge) {
+        edgeIds.add(edge.id);
+        nodeIds.add(edge.source);
+        currentId = edge.source;
+      } else {
+        break;
+      }
+    }
+
+    const descendantIds = getDescendantIds(targetId);
+    descendantIds.forEach((id) => nodeIds.add(id));
+
+    flowEdges.value.forEach((edge) => {
+      if (nodeIds.has(edge.source) && nodeIds.has(edge.target)) {
+        edgeIds.add(edge.id);
+      }
+    });
+
+    return { nodeIds, edgeIds };
+  });
+
+  const savedConfig = localStorage.getItem("thinkflow_config");
+  const config = reactive(
+    savedConfig
+      ? JSON.parse(savedConfig)
+      : {
+          edgeColor: "#fed7aa",
+          edgeType: "default",
+          backgroundVariant: BackgroundVariant.Lines,
+          showControls: true,
+          showMiniMap: true,
+          hierarchicalDragging: false,
+          snapToGrid: true,
+          snapGrid: [16, 16] as [number, number],
+          snapToAlignment: true,
+          showAlignmentGuides: true,
         },
-        image: {
-            baseUrl: localStorage.getItem('image_baseUrl') || '',
-            model: localStorage.getItem('image_model') || '',
-            apiKey: localStorage.getItem('image_apiKey') || ''
+  );
+
+  const collapsedNodeIds = ref<string[]>([]);
+  const isInitialLoad = ref(true);
+
+  /**
+   * 画布状态持久化 (Nodes, Edges, Collapsed)
+   */
+  watch(
+    [
+      () => flowNodes.value,
+      () => flowEdges.value,
+      () => collapsedNodeIds.value,
+    ],
+    () => {
+      if (isInitialLoad.value) return;
+
+      // 使用 toRaw 确保保存的是纯 JS 对象，避免响应式代理带来的序列化问题
+      localStorage.setItem(
+        "thinkflow_nodes",
+        JSON.stringify(toRaw(flowNodes.value)),
+      );
+      localStorage.setItem(
+        "thinkflow_edges",
+        JSON.stringify(toRaw(flowEdges.value)),
+      );
+      localStorage.setItem(
+        "thinkflow_collapsed",
+        JSON.stringify(toRaw(collapsedNodeIds.value)),
+      );
+    },
+    { deep: true },
+  );
+
+  /**
+   * UI 配置持久化
+   */
+  watch(
+    () => config,
+    (newConfig) => {
+      if (isInitialLoad.value) return;
+      localStorage.setItem(
+        "thinkflow_config",
+        JSON.stringify(toRaw(newConfig)),
+      );
+    },
+    { deep: true },
+  );
+
+  /**
+   * 初始化时从本地存储恢复状态
+   */
+  onMounted(async () => {
+    const savedNodes = localStorage.getItem("thinkflow_nodes");
+    const savedEdges = localStorage.getItem("thinkflow_edges");
+    const savedCollapsed = localStorage.getItem("thinkflow_collapsed");
+
+    if (savedNodes && savedEdges) {
+      try {
+        const nodes = JSON.parse(savedNodes);
+        const edges = JSON.parse(savedEdges);
+        const collapsed = savedCollapsed ? JSON.parse(savedCollapsed) : [];
+
+        if (nodes.length > 0) {
+          // 必须先清空当前可能存在的默认节点（如果有）
+          setNodes([]);
+          setEdges([]);
+
+          await nextTick();
+
+          // 恢复节点和边
+          setNodes(nodes);
+          setEdges(edges);
+          collapsedNodeIds.value = collapsed;
+
+          // 恢复后自适应一次视图
+          setTimeout(() => {
+            fitView({ padding: 0.2, duration: 800 });
+          }, 150);
         }
-    })
+      } catch (e) {
+        console.error("Failed to restore ThinkFlow state:", e);
+      }
+    }
+
+    // 确保在所有初始化操作（包括可能的 setNodes）完成后再开启保存
+    await nextTick();
+    setTimeout(() => {
+      isInitialLoad.value = false;
+    }, 300);
+  });
+
+  const isSubtreeCollapsed = (nodeId: string) =>
+    collapsedNodeIds.value.includes(nodeId);
+
+  const toggleSubtreeCollapse = (nodeId: string) => {
+    if (isSubtreeCollapsed(nodeId)) {
+      collapsedNodeIds.value = collapsedNodeIds.value.filter(
+        (id) => id !== nodeId,
+      );
+    } else {
+      collapsedNodeIds.value = [...collapsedNodeIds.value, nodeId];
+    }
+  };
+
+  const applyCollapsedVisibility = () => {
+    const hiddenIds = new Set<string>();
+    const childrenCountById = new Map<string, number>();
+
+    for (const e of flowEdges.value) {
+      childrenCountById.set(
+        e.source,
+        (childrenCountById.get(e.source) ?? 0) + 1,
+      );
+    }
+
+    for (const id of collapsedNodeIds.value) {
+      const descendants = getDescendantIds(id);
+      descendants.forEach((d) => hiddenIds.add(d));
+    }
+
+    setNodes(
+      flowNodes.value.map((n) => {
+        const isHidden = hiddenIds.has(n.id);
+        const isCollapsed = isSubtreeCollapsed(n.id);
+        const hiddenDescendantCount = isCollapsed
+          ? getDescendantIds(n.id).size
+          : 0;
+        const childrenCount = childrenCountById.get(n.id) ?? 0;
+        const nextData =
+          n.data?.hiddenDescendantCount !== hiddenDescendantCount ||
+          n.data?.childrenCount !== childrenCount
+            ? { ...n.data, hiddenDescendantCount, childrenCount }
+            : n.data;
+
+        return {
+          ...n,
+          hidden: isHidden,
+          data: nextData,
+        };
+      }),
+    );
+
+    setEdges(
+      flowEdges.value.map((e) => ({
+        ...e,
+        hidden: hiddenIds.has(e.source) || hiddenIds.has(e.target),
+      })),
+    );
+  };
+
+  watch(
+    [
+      () => collapsedNodeIds.value.join(","),
+      () => flowNodes.value.length,
+      () => flowEdges.value.length,
+    ],
+    applyCollapsedVisibility,
+    { immediate: true },
+  );
+
+  const lastAppliedStatus = ref("");
+
+  /**
+   * 根据激活路径与配置，动态更新边的样式（高亮/透明度/动画）
+   * - 通过 lastAppliedStatus 避免无效重复 setEdges
+   */
+  watch(
+    [
+      () => activeNodeId.value,
+      () => config.edgeColor,
+      () => config.edgeType,
+      () => flowEdges.value.length,
+      () => flowNodes.value.some((n) => n.data.isExpanding),
+    ],
+    ([, newColor, newType, , anyExpanding]) => {
+      const { edgeIds } = activePath.value;
+      const edgeIdsStr = Array.from(edgeIds).sort().join(",");
+
+      const currentStatus = `${edgeIdsStr}-${newColor}-${newType}-${anyExpanding}`;
+      if (lastAppliedStatus.value === currentStatus) return;
+      lastAppliedStatus.value = currentStatus;
+
+      setEdges(
+        flowEdges.value.map((edge) => {
+          const isHighlighted = edgeIds.has(edge.id);
+          const isExpanding = !!flowNodes.value.find(
+            (n) => n.id === edge.source,
+          )?.data.isExpanding;
+
+          return {
+            ...edge,
+            type: newType,
+            animated: isHighlighted || isExpanding,
+            style: {
+              ...edge.style,
+              stroke: isHighlighted ? newColor : `${newColor}33`,
+              strokeWidth: isHighlighted ? 3 : 2,
+              transition: "all 0.3s ease",
+            },
+          };
+        }),
+      );
+    },
+    { immediate: true },
+  );
+
+  /**
+   * 将网络/接口异常转换为用户可读的错误文案
+   */
+  const getErrorMessage = (error: any) => {
+    if (error.name === "TypeError" && error.message === "Failed to fetch") {
+      return t("common.error.cors");
+    }
+    if (error.status === 429) return t("common.error.rateLimit");
+    if (error.status === 400) return t("common.error.badRequest");
+    if (error.status >= 500) return t("common.error.serverError");
+    return error.message || t("common.error.unknown");
+  };
+
+  /**
+   * 视图：将根节点居中显示
+   */
+  const centerRoot = () => {
+    const rootNode = flowNodes.value.find((n) => n.data.type === "root");
+    if (rootNode) {
+      fitView({ nodes: [rootNode.id], padding: 2, duration: 800 });
+    }
+  };
+
+  /**
+   * 布局：从根节点开始按“横向树形”重新排布节点位置
+   * - 动态计算节点宽高与子树高度，确保在节点展开（回答/生图）后仍能整齐排布
+   */
+  const resetLayout = () => {
+    const rootNode = flowNodes.value.find((n) => n.data.type === "root");
+    if (!rootNode) return;
+
+    const nodeGapX = 150; // 节点层级间的横向间距
+    const nodeGapY = 40; // 同级节点间的纵向间距
 
     /**
-     * 语言选择持久化（与 i18n/index.ts 中的初始化配合）
+     * 获取节点的实际尺寸，优先使用已测量尺寸，否则使用默认值
      */
-    watch(
-        () => locale.value,
-        newVal => {
-            localStorage.setItem('language', newVal)
-        }
-    )
+    const getNodeSize = (node: any) => ({
+      width: node.dimensions?.width ?? node.measured?.width ?? 280,
+      height: node.dimensions?.height ?? node.measured?.height ?? 180,
+    });
+
+    // 存储每个节点及其子树所需的总高度
+    const subtreeHeights = new Map<string, number>();
 
     /**
-     * API 配置持久化：任何字段变化都会更新 localStorage
+     * 第一遍遍历：递归计算每个节点及其子树占用的总高度
      */
-    watch(
-        () => apiConfig,
-        newVal => {
-            localStorage.setItem('api_mode', newVal.mode)
-            localStorage.setItem('chat_baseUrl', newVal.chat.baseUrl)
-            localStorage.setItem('chat_model', newVal.chat.model)
-            localStorage.setItem('chat_apiKey', newVal.chat.apiKey)
-            localStorage.setItem('image_baseUrl', newVal.image.baseUrl)
-            localStorage.setItem('image_model', newVal.image.model)
-            localStorage.setItem('image_apiKey', newVal.image.apiKey)
+    const calculateSubtreeHeight = (nodeId: string): number => {
+      const node = flowNodes.value.find((n) => n.id === nodeId);
+      if (!node || node.hidden) return 0;
+
+      const size = getNodeSize(node);
+      const children = flowEdges.value
+        .filter((e) => e.source === nodeId)
+        .map((e) => e.target)
+        .filter((id) => {
+          const childNode = flowNodes.value.find((n) => n.id === id);
+          return childNode && !childNode.hidden;
+        });
+
+      if (children.length === 0) {
+        subtreeHeights.set(nodeId, size.height);
+        return size.height;
+      }
+
+      let childrenTotalHeight = 0;
+      children.forEach((childId, index) => {
+        childrenTotalHeight += calculateSubtreeHeight(childId);
+        if (index < children.length - 1) {
+          childrenTotalHeight += nodeGapY;
+        }
+      });
+
+      // 节点自身高度与子树高度取较大值
+      const totalHeight = Math.max(size.height, childrenTotalHeight);
+      subtreeHeights.set(nodeId, totalHeight);
+      return totalHeight;
+    };
+
+    // 开始计算
+    calculateSubtreeHeight(rootNode.id);
+
+    const visited = new Set<string>();
+
+    /**
+     * 第二遍遍历：根据计算出的子树高度，递归设置节点位置
+     * @param nodeId 当前节点 ID
+     * @param x 当前起始 X 坐标
+     * @param ySubtreeTop 当前子树顶部的 Y 坐标
+     */
+    const layoutNode = (nodeId: string, x: number, ySubtreeTop: number) => {
+      if (visited.has(nodeId)) return;
+      visited.add(nodeId);
+
+      const node = flowNodes.value.find((n) => n.id === nodeId);
+      if (!node || node.hidden) return;
+
+      const size = getNodeSize(node);
+      const subtreeHeight = subtreeHeights.get(nodeId) || size.height;
+
+      // 将节点放置在子树区域的垂直中心
+      node.position = {
+        x,
+        y: ySubtreeTop + (subtreeHeight - size.height) / 2,
+      };
+
+      const children = flowEdges.value
+        .filter((e) => e.source === nodeId)
+        .map((e) => e.target)
+        .filter((id) => {
+          const childNode = flowNodes.value.find((n) => n.id === id);
+          return childNode && !childNode.hidden;
+        });
+
+      if (children.length > 0) {
+        const nextX = x + size.width + nodeGapX;
+        let currentY = ySubtreeTop;
+
+        children.forEach((childId) => {
+          const childSubtreeHeight = subtreeHeights.get(childId) || 0;
+          layoutNode(childId, nextX, currentY);
+          currentY += childSubtreeHeight + nodeGapY;
+        });
+      }
+    };
+
+    // 从根节点开始排版
+    layoutNode(rootNode.id, 50, 100);
+
+    // 延迟执行 fitView 确保位置更新已应用
+    setTimeout(() => {
+      fitView({ padding: 0.2, duration: 800 });
+    }, 100);
+  };
+
+  /**
+   * 导出：将当前树形结构导出为 Markdown
+   * - 以 root 为标题
+   * - 子节点按缩进列表输出
+   * - 回答内容（deepDive）以引用块输出
+   * - 节点描述（description）紧随标题输出
+   */
+  const exportMarkdown = () => {
+    if (flowNodes.value.length === 0) return;
+
+    const rootNode = flowNodes.value.find((n) => n.data.type === "root");
+    if (!rootNode) return;
+
+    let markdown = `# ${rootNode.data.label}\n\n`;
+
+    if (rootNode.data.description) {
+      markdown += `> ${rootNode.data.description}\n\n`;
+    }
+
+    if (rootNode.data.detailedContent) {
+      markdown += `## ${t("node.deepDive")}\n\n${rootNode.data.detailedContent}\n\n---\n\n`;
+    }
+
+    const buildMarkdown = (parentId: string, level: number) => {
+      const children = flowEdges.value
+        .filter((e) => e.source === parentId)
+        .map((e) => flowNodes.value.find((n) => n.id === e.target))
+        .filter((n) => n !== undefined);
+
+      children.forEach((child) => {
+        const indent = "  ".repeat(level - 1);
+        const detailIndent = "  ".repeat(level);
+
+        // 写入节点标题与描述
+        markdown += `${indent}- **${child!.data.label}**`;
+        if (child!.data.description) {
+          markdown += `: ${child!.data.description}`;
+        }
+        markdown += "\n";
+
+        // 如果有深挖回答，以引用块形式展示
+        if (child!.data.detailedContent) {
+          markdown += `${detailIndent}> **[${t("node.deepDive")}]**\n`;
+          markdown += `${detailIndent}> ${child!.data.detailedContent.replace(/\n/g, `\n${detailIndent}> `)}\n`;
+        }
+
+        buildMarkdown(child!.id, level + 1);
+      });
+    };
+
+    buildMarkdown(rootNode.id, 1);
+
+    const blob = new Blob([markdown], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.download = `thinkflow-${rootNode.data.label}-${Date.now()}.md`;
+    link.href = url;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  /**
+   * 图谱对话状态
+   */
+  const showChatSidebar = ref(false);
+  const isChatting = ref(false);
+  const graphChatMessages = ref<
+    { role: "user" | "assistant"; content: string }[]
+  >([]);
+
+  /**
+   * 添加便签 (Sticky Note)
+   */
+  const addStickyNote = (pos?: { x: number; y: number }) => {
+    const id = "sticky-" + Date.now();
+    const position =
+      pos ||
+      project({
+        x: window.innerWidth / 2 - 100,
+        y: window.innerHeight / 2 - 50,
+      });
+
+    addNodes({
+      id,
+      type: "sticky",
+      position,
+      data: {
+        label: "",
+        type: "sticky",
+      },
+    });
+  };
+
+  /**
+   * 与图谱对话 (Chat with Graph)
+   */
+  const sendGraphChatMessage = async (userMessage: string) => {
+    if (!userMessage.trim() || isChatting.value) return;
+
+    graphChatMessages.value.push({ role: "user", content: userMessage });
+    isChatting.value = true;
+
+    // 构建图谱上下文
+    const buildGraphContext = () => {
+      const nodesText = flowNodes.value
+        .map((n) => {
+          if (n.type === "sticky") return `[Note]: ${n.data.label}`;
+          return `[Node]: ${n.data.label} - ${n.data.description || ""}`;
+        })
+        .join("\n");
+      return nodesText;
+    };
+
+    const graphContext = buildGraphContext();
+    const useConfig =
+      apiConfig.mode === "default" ? DEFAULT_CONFIG.chat : apiConfig.chat;
+    const finalApiKey =
+      apiConfig.mode === "default"
+        ? useConfig.apiKey || API_KEY
+        : useConfig.apiKey;
+
+    try {
+      const response = await fetch(useConfig.baseUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${finalApiKey}`,
         },
-        { deep: true }
-    )
-
-    /**
-     * 设置弹窗开关（由顶部导航触发）
-     */
-    const showSettings = ref(false)
-
-    /**
-     * VueFlow 实例能力集合：节点/边增删改与视图控制
-     */
-    const {
-        addNodes,
-        addEdges,
-        setNodes,
-        setEdges,
-        nodes: flowNodes,
-        edges: flowEdges,
-        updateNode,
-        removeNodes,
-        removeEdges,
-        fitView,
-        viewport,
-        onNodeDragStart,
-        onNodeDrag,
-        onNodeDragStop,
-        project
-    } = useVueFlow()
-
-    /**
-     * 全局输入与对话状态
-     */
-    const ideaInput = ref('')
-    const isLoading = ref(false)
-    const previewImageUrl = ref<string | null>(null)
-    const showResetConfirm = ref(false)
-    const showSummaryModal = ref(false)
-    const isSummarizing = ref(false)
-    const summaryContent = ref('')
-
-    /**
-     * AI 思考风格
-     * - creative: 发散模式 (默认)
-     * - precise: 严谨模式
-     */
-    const aiStyle = ref(localStorage.getItem('ai_style') || 'creative')
-
-    watch(aiStyle, val => {
-        localStorage.setItem('ai_style', val)
-    })
-
-    /**
-     * 演示模式状态
-     */
-    const isPresenting = ref(false)
-    const presentationIndex = ref(-1)
-
-    /**
-     * 搜索状态
-     */
-    const searchQuery = ref('')
-    const searchResults = computed(() => {
-        if (!searchQuery.value.trim()) return []
-        const q = searchQuery.value.toLowerCase()
-        return flowNodes.value.filter(n => n.data.label?.toLowerCase().includes(q) || n.data.description?.toLowerCase().includes(q))
-    })
-
-    const focusNode = (nodeId: string) => {
-        const node = flowNodes.value.find(n => n.id === nodeId)
-        if (node) {
-            setNodes(flowNodes.value.map(n => ({ ...n, selected: n.id === nodeId })))
-            fitView({ nodes: [nodeId], padding: 2, duration: 800 })
-        }
-    }
-
-    const nextPresentationNode = () => {
-        if (flowNodes.value.length === 0) return
-        presentationIndex.value = (presentationIndex.value + 1) % flowNodes.value.length
-        focusNode(flowNodes.value[presentationIndex.value].id)
-    }
-
-    const prevPresentationNode = () => {
-        if (flowNodes.value.length === 0) return
-        presentationIndex.value = (presentationIndex.value - 1 + flowNodes.value.length) % flowNodes.value.length
-        focusNode(flowNodes.value[presentationIndex.value].id)
-    }
-
-    const togglePresentation = () => {
-        isPresenting.value = !isPresenting.value
-        if (isPresenting.value) {
-            presentationIndex.value = 0
-            if (flowNodes.value.length > 0) {
-                focusNode(flowNodes.value[0].id)
-            }
-        } else {
-            presentationIndex.value = -1
-        }
-    }
-
-    const draggingNodeId = ref<string | null>(null)
-    const dragLastPositionByNodeId = new Map<string, { x: number; y: number }>()
-    const alignmentGuides = ref<{ x: number | null; y: number | null }>({ x: null, y: null })
-
-    /**
-     * 交互：按住 Space 启用“抓手拖拽画布”
-     * - isSpacePressed 用于在 UI 层展示手型光标
-     * - panOnDrag 控制 VueFlow 的拖拽行为（按 Space 时总是允许拖拽画布）
-     */
-    const panOnDrag = ref(true)
-    const isSpacePressed = ref(false)
-
-    window.addEventListener('keydown', e => {
-        if (e.code === 'Space' && !['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) {
-            isSpacePressed.value = true
-            panOnDrag.value = true
-        }
-    })
-
-    window.addEventListener('keyup', e => {
-        if (e.code === 'Space') {
-            isSpacePressed.value = false
-        }
-    })
-
-    /**
-     * 用拖拽节点作为“当前激活节点”的一种来源，便于高亮路径/聚焦
-     */
-    onNodeDragStart(e => {
-        draggingNodeId.value = e.node.id
-        dragLastPositionByNodeId.set(e.node.id, {
-            x: e.node.position.x,
-            y: e.node.position.y
-        })
-    })
-
-    /**
-     * 处理节点拖拽事件 (联动移动子节点)
-     */
-    const handleNodeDrag = (payload: any) => {
-        const node = payload?.node ?? payload
-        if (!node?.id || !node?.position) return
-
-        const draggedStoreNode = flowNodes.value.find(n => n.id === node.id)
-        if (!draggedStoreNode) return
-
-        if (config.snapToAlignment) {
-            const snapThreshold = 8
-
-            const getNodeVisualInfo = (n: any, currentPos?: { x: number; y: number }) => {
-                const width = n.dimensions?.width ?? n.measured?.width ?? 280
-                const height = n.dimensions?.height ?? n.measured?.height ?? 180
-
-                // 核心逻辑：计算视觉缩放比例，与 WindowNode.vue 中的逻辑保持一致
-                let scale = 1.0
-                if (activeNodeId.value) {
-                    if (activePath.value.nodeIds.has(n.id)) {
-                        // 在拖拽或处于活跃路径时，节点会放大 1.05
-                        // 注意：WindowNode 中 focus 时是 1.1，但拖拽时通常 input 不会处于 focus 状态
-                        scale = 1.05
-                    } else {
-                        // 非活跃路径节点会缩小并变淡
-                        scale = 0.98
-                    }
-                }
-
-                const x = currentPos?.x ?? n.position.x
-                const y = currentPos?.y ?? n.position.y
-
-                // 因为 CSS transform: scale 默认是从中心缩放，所以视觉上的起始点 (top-left) 会发生偏移
-                const visualWidth = width * scale
-                const visualHeight = height * scale
-                const offsetX = (visualWidth - width) / 2
-                const offsetY = (visualHeight - height) / 2
-
-                return {
-                    width: visualWidth,
-                    height: visualHeight,
-                    x: x - offsetX,
-                    y: y - offsetY,
-                    scale
-                }
-            }
-
-            const draggedInfo = getNodeVisualInfo(draggedStoreNode, { x: node.position.x, y: node.position.y })
-            const proposedX = node.position.x
-            const proposedY = node.position.y
-
-            // 使用视觉坐标进行对齐计算
-            const draggedAnchorsX = [draggedInfo.x, draggedInfo.x + draggedInfo.width / 2, draggedInfo.x + draggedInfo.width]
-            const draggedAnchorsY = [draggedInfo.y, draggedInfo.y + draggedInfo.height / 2, draggedInfo.y + draggedInfo.height]
-
-            let bestX: { delta: number; guide: number } | null = null
-            let bestY: { delta: number; guide: number } | null = null
-
-            for (const other of flowNodes.value) {
-                if (other.id === node.id) continue
-                if (other.hidden) continue
-
-                const otherInfo = getNodeVisualInfo(other)
-                const otherAnchorsX = [otherInfo.x, otherInfo.x + otherInfo.width / 2, otherInfo.x + otherInfo.width]
-                const otherAnchorsY = [otherInfo.y, otherInfo.y + otherInfo.height / 2, otherInfo.y + otherInfo.height]
-
-                for (const ox of otherAnchorsX) {
-                    for (const ax of draggedAnchorsX) {
-                        const delta = ox - ax
-                        const absDelta = Math.abs(delta)
-                        if (absDelta <= snapThreshold && (!bestX || absDelta < Math.abs(bestX.delta))) {
-                            bestX = { delta, guide: ox }
-                        }
-                    }
-                }
-
-                for (const oy of otherAnchorsY) {
-                    for (const ay of draggedAnchorsY) {
-                        const delta = oy - ay
-                        const absDelta = Math.abs(delta)
-                        if (absDelta <= snapThreshold && (!bestY || absDelta < Math.abs(bestY.delta))) {
-                            bestY = { delta, guide: oy }
-                        }
-                    }
-                }
-            }
-
-            const snappedX = bestX ? proposedX + bestX.delta : proposedX
-            const snappedY = bestY ? proposedY + bestY.delta : proposedY
-
-            alignmentGuides.value = config.showAlignmentGuides ? { x: bestX?.guide ?? null, y: bestY?.guide ?? null } : { x: null, y: null }
-
-            if (snappedX !== proposedX || snappedY !== proposedY) {
-                draggedStoreNode.position = { x: snappedX, y: snappedY }
-                node.position = { x: snappedX, y: snappedY }
-            }
-        } else {
-            alignmentGuides.value = { x: null, y: null }
-        }
-
-        if (!config.hierarchicalDragging) return
-
-        const lastPosition = dragLastPositionByNodeId.get(node.id)
-        if (!lastPosition) {
-            const fallbackDelta = payload?.delta
-            dragLastPositionByNodeId.set(node.id, { x: node.position.x, y: node.position.y })
-            if (fallbackDelta && typeof fallbackDelta.x === 'number' && typeof fallbackDelta.y === 'number') {
-                const descendantIds = getDescendantIds(node.id)
-                if (descendantIds.size === 0) return
-
-                const selectedNodeIds = new Set(flowNodes.value.filter(n => n.selected).map(n => n.id))
-                descendantIds.forEach(id => {
-                    if (!selectedNodeIds.has(id)) {
-                        const targetNode = flowNodes.value.find(n => n.id === id)
-                        if (targetNode) {
-                            targetNode.position = {
-                                x: targetNode.position.x + fallbackDelta.x,
-                                y: targetNode.position.y + fallbackDelta.y
-                            }
-                        }
-                    }
-                })
-            }
-            return
-        }
-
-        const dx = node.position.x - lastPosition.x
-        const dy = node.position.y - lastPosition.y
-        if (dx === 0 && dy === 0) return
-
-        dragLastPositionByNodeId.set(node.id, { x: node.position.x, y: node.position.y })
-
-        const descendantIds = getDescendantIds(node.id)
-        if (descendantIds.size === 0) return
-
-        // 获取当前所有选中的节点，避免重复位移
-        const selectedNodeIds = new Set(flowNodes.value.filter(n => n.selected).map(n => n.id))
-
-        // 批量更新子节点位置
-        descendantIds.forEach(id => {
-            if (!selectedNodeIds.has(id)) {
-                const targetNode = flowNodes.value.find(n => n.id === id)
-                if (targetNode) {
-                    // 直接更新位置对象，确保 Vue 能够检测到深层变化
-                    targetNode.position = {
-                        x: targetNode.position.x + dx,
-                        y: targetNode.position.y + dy
-                    }
-                }
-            }
-        })
-    }
-
-    onNodeDrag(handleNodeDrag)
-
-    onNodeDragStop(e => {
-        draggingNodeId.value = null
-        if (e?.node?.id) {
-            dragLastPositionByNodeId.delete(e.node.id)
-        }
-        alignmentGuides.value = { x: null, y: null }
-    })
-
-    /**
-     * 当前激活节点 id
-     * 优先级：正在展开的节点 > 选中的节点 > 正在拖拽的节点
-     */
-    const activeNodeId = computed(() => {
-        const expandingNode = flowNodes.value.find(n => n.data.isExpanding)
-        const selectedNode = flowNodes.value.find(n => n.selected)
-        return expandingNode?.id || selectedNode?.id || draggingNodeId.value
-    })
-
-    /**
-     * 获取节点的所有后代节点 ID (迭代实现，更健壮)
-     */
-    const getDescendantIds = (nodeId: string): Set<string> => {
-        const descendants = new Set<string>()
-        const stack = [nodeId]
-        const edges = flowEdges.value
-
-        while (stack.length > 0) {
-            const currentId = stack.pop()!
-            for (const edge of edges) {
-                if (edge.source === currentId) {
-                    if (!descendants.has(edge.target)) {
-                        descendants.add(edge.target)
-                        stack.push(edge.target)
-                    }
-                }
-            }
-        }
-        return descendants
-    }
-
-    /**
-     * 删除指定节点的所有后代节点
-     * 用于在重新扩展某个节点时，清空其原有的子树
-     */
-    const removeDescendants = (nodeId: string) => {
-        const descendantIds = getDescendantIds(nodeId)
-        if (descendantIds.size > 0) {
-            removeNodes(Array.from(descendantIds))
-        }
-    }
-
-    /**
-     * 当前激活路径（节点集合 + 边集合）
-     * - 向上：从激活节点回溯到根
-     * - 向下：包含激活节点的所有后代
-     * 用于：
-     * - 节点高亮/弱化
-     * - 边高亮/动画
-     */
-    const activePath = computed(() => {
-        const nodeIds = new Set<string>()
-        const edgeIds = new Set<string>()
-
-        if (!activeNodeId.value) return { nodeIds, edgeIds }
-
-        const targetId = activeNodeId.value
-        nodeIds.add(targetId)
-
-        let currentId = targetId
-        while (currentId) {
-            const edge = flowEdges.value.find(e => e.target === currentId)
-            if (edge) {
-                edgeIds.add(edge.id)
-                nodeIds.add(edge.source)
-                currentId = edge.source
-            } else {
-                break
-            }
-        }
-
-        const descendantIds = getDescendantIds(targetId)
-        descendantIds.forEach(id => nodeIds.add(id))
-
-        flowEdges.value.forEach(edge => {
-            if (nodeIds.has(edge.source) && nodeIds.has(edge.target)) {
-                edgeIds.add(edge.id)
-            }
-        })
-
-        return { nodeIds, edgeIds }
-    })
-
-    const savedConfig = localStorage.getItem('thinkflow_config')
-    const config = reactive(
-        savedConfig
-            ? JSON.parse(savedConfig)
-            : {
-                  edgeColor: '#fed7aa',
-                  edgeType: 'default',
-                  backgroundVariant: BackgroundVariant.Lines,
-                  showControls: true,
-                  showMiniMap: true,
-                  hierarchicalDragging: false,
-                  snapToGrid: true,
-                  snapGrid: [16, 16] as [number, number],
-                  snapToAlignment: true,
-                  showAlignmentGuides: true
-              }
-    )
-
-    const collapsedNodeIds = ref<string[]>([])
-    const isInitialLoad = ref(true)
-
-    /**
-     * 画布状态持久化 (Nodes, Edges, Collapsed)
-     */
-    watch(
-        [() => flowNodes.value, () => flowEdges.value, () => collapsedNodeIds.value],
-        () => {
-            if (isInitialLoad.value) return
-
-            // 使用 toRaw 确保保存的是纯 JS 对象，避免响应式代理带来的序列化问题
-            localStorage.setItem('thinkflow_nodes', JSON.stringify(toRaw(flowNodes.value)))
-            localStorage.setItem('thinkflow_edges', JSON.stringify(toRaw(flowEdges.value)))
-            localStorage.setItem('thinkflow_collapsed', JSON.stringify(toRaw(collapsedNodeIds.value)))
-        },
-        { deep: true }
-    )
-
-    /**
-     * UI 配置持久化
-     */
-    watch(
-        () => config,
-        newConfig => {
-            if (isInitialLoad.value) return
-            localStorage.setItem('thinkflow_config', JSON.stringify(toRaw(newConfig)))
-        },
-        { deep: true }
-    )
-
-    /**
-     * 初始化时从本地存储恢复状态
-     */
-    onMounted(async () => {
-        const savedNodes = localStorage.getItem('thinkflow_nodes')
-        const savedEdges = localStorage.getItem('thinkflow_edges')
-        const savedCollapsed = localStorage.getItem('thinkflow_collapsed')
-
-        if (savedNodes && savedEdges) {
-            try {
-                const nodes = JSON.parse(savedNodes)
-                const edges = JSON.parse(savedEdges)
-                const collapsed = savedCollapsed ? JSON.parse(savedCollapsed) : []
-
-                if (nodes.length > 0) {
-                    // 必须先清空当前可能存在的默认节点（如果有）
-                    setNodes([])
-                    setEdges([])
-
-                    await nextTick()
-
-                    // 恢复节点和边
-                    setNodes(nodes)
-                    setEdges(edges)
-                    collapsedNodeIds.value = collapsed
-
-                    // 恢复后自适应一次视图
-                    setTimeout(() => {
-                        fitView({ padding: 0.2, duration: 800 })
-                    }, 150)
-                }
-            } catch (e) {
-                console.error('Failed to restore ThinkFlow state:', e)
-            }
-        }
-
-        // 确保在所有初始化操作（包括可能的 setNodes）完成后再开启保存
-        await nextTick()
-        setTimeout(() => {
-            isInitialLoad.value = false
-        }, 300)
-    })
-
-    const isSubtreeCollapsed = (nodeId: string) => collapsedNodeIds.value.includes(nodeId)
-
-    const toggleSubtreeCollapse = (nodeId: string) => {
-        if (isSubtreeCollapsed(nodeId)) {
-            collapsedNodeIds.value = collapsedNodeIds.value.filter(id => id !== nodeId)
-        } else {
-            collapsedNodeIds.value = [...collapsedNodeIds.value, nodeId]
-        }
-    }
-
-    const applyCollapsedVisibility = () => {
-        const hiddenIds = new Set<string>()
-        const childrenCountById = new Map<string, number>()
-
-        for (const e of flowEdges.value) {
-            childrenCountById.set(e.source, (childrenCountById.get(e.source) ?? 0) + 1)
-        }
-
-        for (const id of collapsedNodeIds.value) {
-            const descendants = getDescendantIds(id)
-            descendants.forEach(d => hiddenIds.add(d))
-        }
-
-        setNodes(
-            flowNodes.value.map(n => {
-                const isHidden = hiddenIds.has(n.id)
-                const isCollapsed = isSubtreeCollapsed(n.id)
-                const hiddenDescendantCount = isCollapsed ? getDescendantIds(n.id).size : 0
-                const childrenCount = childrenCountById.get(n.id) ?? 0
-                const nextData =
-                    n.data?.hiddenDescendantCount !== hiddenDescendantCount || n.data?.childrenCount !== childrenCount
-                        ? { ...n.data, hiddenDescendantCount, childrenCount }
-                        : n.data
-
-                return {
-                    ...n,
-                    hidden: isHidden,
-                    data: nextData
-                }
-            })
-        )
-
-        setEdges(
-            flowEdges.value.map(e => ({
-                ...e,
-                hidden: hiddenIds.has(e.source) || hiddenIds.has(e.target)
-            }))
-        )
-    }
-
-    watch([() => collapsedNodeIds.value.join(','), () => flowNodes.value.length, () => flowEdges.value.length], applyCollapsedVisibility, { immediate: true })
-
-    const lastAppliedStatus = ref('')
-
-    /**
-     * 根据激活路径与配置，动态更新边的样式（高亮/透明度/动画）
-     * - 通过 lastAppliedStatus 避免无效重复 setEdges
-     */
-    watch(
-        [() => activeNodeId.value, () => config.edgeColor, () => config.edgeType, () => flowEdges.value.length, () => flowNodes.value.some(n => n.data.isExpanding)],
-        ([, newColor, newType, , anyExpanding]) => {
-            const { edgeIds } = activePath.value
-            const edgeIdsStr = Array.from(edgeIds).sort().join(',')
-
-            const currentStatus = `${edgeIdsStr}-${newColor}-${newType}-${anyExpanding}`
-            if (lastAppliedStatus.value === currentStatus) return
-            lastAppliedStatus.value = currentStatus
-
-            setEdges(
-                flowEdges.value.map(edge => {
-                    const isHighlighted = edgeIds.has(edge.id)
-                    const isExpanding = !!flowNodes.value.find(n => n.id === edge.source)?.data.isExpanding
-
-                    return {
-                        ...edge,
-                        type: newType,
-                        animated: isHighlighted || isExpanding,
-                        style: {
-                            ...edge.style,
-                            stroke: isHighlighted ? newColor : `${newColor}33`,
-                            strokeWidth: isHighlighted ? 3 : 2,
-                            transition: 'all 0.3s ease'
-                        }
-                    }
-                })
-            )
-        },
-        { immediate: true }
-    )
-
-    /**
-     * 将网络/接口异常转换为用户可读的错误文案
-     */
-    const getErrorMessage = (error: any) => {
-        if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
-            return t('common.error.cors')
-        }
-        if (error.status === 429) return t('common.error.rateLimit')
-        if (error.status === 400) return t('common.error.badRequest')
-        if (error.status >= 500) return t('common.error.serverError')
-        return error.message || t('common.error.unknown')
-    }
-
-    /**
-     * 视图：将根节点居中显示
-     */
-    const centerRoot = () => {
-        const rootNode = flowNodes.value.find(n => n.data.type === 'root')
-        if (rootNode) {
-            fitView({ nodes: [rootNode.id], padding: 2, duration: 800 })
-        }
-    }
-
-    /**
-     * 布局：从根节点开始按“横向树形”重新排布节点位置
-     * - 动态计算节点宽高与子树高度，确保在节点展开（回答/生图）后仍能整齐排布
-     */
-    const resetLayout = () => {
-        const rootNode = flowNodes.value.find(n => n.data.type === 'root')
-        if (!rootNode) return
-
-        const nodeGapX = 150 // 节点层级间的横向间距
-        const nodeGapY = 40 // 同级节点间的纵向间距
-
-        /**
-         * 获取节点的实际尺寸，优先使用已测量尺寸，否则使用默认值
-         */
-        const getNodeSize = (node: any) => ({
-            width: node.dimensions?.width ?? node.measured?.width ?? 280,
-            height: node.dimensions?.height ?? node.measured?.height ?? 180
-        })
-
-        // 存储每个节点及其子树所需的总高度
-        const subtreeHeights = new Map<string, number>()
-
-        /**
-         * 第一遍遍历：递归计算每个节点及其子树占用的总高度
-         */
-        const calculateSubtreeHeight = (nodeId: string): number => {
-            const node = flowNodes.value.find(n => n.id === nodeId)
-            if (!node || node.hidden) return 0
-
-            const size = getNodeSize(node)
-            const children = flowEdges.value
-                .filter(e => e.source === nodeId)
-                .map(e => e.target)
-                .filter(id => {
-                    const childNode = flowNodes.value.find(n => n.id === id)
-                    return childNode && !childNode.hidden
-                })
-
-            if (children.length === 0) {
-                subtreeHeights.set(nodeId, size.height)
-                return size.height
-            }
-
-            let childrenTotalHeight = 0
-            children.forEach((childId, index) => {
-                childrenTotalHeight += calculateSubtreeHeight(childId)
-                if (index < children.length - 1) {
-                    childrenTotalHeight += nodeGapY
-                }
-            })
-
-            // 节点自身高度与子树高度取较大值
-            const totalHeight = Math.max(size.height, childrenTotalHeight)
-            subtreeHeights.set(nodeId, totalHeight)
-            return totalHeight
-        }
-
-        // 开始计算
-        calculateSubtreeHeight(rootNode.id)
-
-        const visited = new Set<string>()
-
-        /**
-         * 第二遍遍历：根据计算出的子树高度，递归设置节点位置
-         * @param nodeId 当前节点 ID
-         * @param x 当前起始 X 坐标
-         * @param ySubtreeTop 当前子树顶部的 Y 坐标
-         */
-        const layoutNode = (nodeId: string, x: number, ySubtreeTop: number) => {
-            if (visited.has(nodeId)) return
-            visited.add(nodeId)
-
-            const node = flowNodes.value.find(n => n.id === nodeId)
-            if (!node || node.hidden) return
-
-            const size = getNodeSize(node)
-            const subtreeHeight = subtreeHeights.get(nodeId) || size.height
-
-            // 将节点放置在子树区域的垂直中心
-            node.position = {
-                x,
-                y: ySubtreeTop + (subtreeHeight - size.height) / 2
-            }
-
-            const children = flowEdges.value
-                .filter(e => e.source === nodeId)
-                .map(e => e.target)
-                .filter(id => {
-                    const childNode = flowNodes.value.find(n => n.id === id)
-                    return childNode && !childNode.hidden
-                })
-
-            if (children.length > 0) {
-                const nextX = x + size.width + nodeGapX
-                let currentY = ySubtreeTop
-
-                children.forEach(childId => {
-                    const childSubtreeHeight = subtreeHeights.get(childId) || 0
-                    layoutNode(childId, nextX, currentY)
-                    currentY += childSubtreeHeight + nodeGapY
-                })
-            }
-        }
-
-        // 从根节点开始排版
-        layoutNode(rootNode.id, 50, 100)
-
-        // 延迟执行 fitView 确保位置更新已应用
-        setTimeout(() => {
-            fitView({ padding: 0.2, duration: 800 })
-        }, 100)
-    }
-
-    /**
-     * 导出：将当前树形结构导出为 Markdown
-     * - 以 root 为标题
-     * - 子节点按缩进列表输出
-     * - 回答内容（deepDive）以引用块输出
-     * - 节点描述（description）紧随标题输出
-     */
-    const exportMarkdown = () => {
-        if (flowNodes.value.length === 0) return
-
-        const rootNode = flowNodes.value.find(n => n.data.type === 'root')
-        if (!rootNode) return
-
-        let markdown = `# ${rootNode.data.label}\n\n`
-
-        if (rootNode.data.description) {
-            markdown += `> ${rootNode.data.description}\n\n`
-        }
-
-        if (rootNode.data.detailedContent) {
-            markdown += `## ${t('node.deepDive')}\n\n${rootNode.data.detailedContent}\n\n---\n\n`
-        }
-
-        const buildMarkdown = (parentId: string, level: number) => {
-            const children = flowEdges.value
-                .filter(e => e.source === parentId)
-                .map(e => flowNodes.value.find(n => n.id === e.target))
-                .filter(n => n !== undefined)
-
-            children.forEach(child => {
-                const indent = '  '.repeat(level - 1)
-                const detailIndent = '  '.repeat(level)
-
-                // 写入节点标题与描述
-                markdown += `${indent}- **${child!.data.label}**`
-                if (child!.data.description) {
-                    markdown += `: ${child!.data.description}`
-                }
-                markdown += '\n'
-
-                // 如果有深挖回答，以引用块形式展示
-                if (child!.data.detailedContent) {
-                    markdown += `${detailIndent}> **[${t('node.deepDive')}]**\n`
-                    markdown += `${detailIndent}> ${child!.data.detailedContent.replace(/\n/g, `\n${detailIndent}> `)}\n`
-                }
-
-                buildMarkdown(child!.id, level + 1)
-            })
-        }
-
-        buildMarkdown(rootNode.id, 1)
-
-        const blob = new Blob([markdown], { type: 'text/markdown' })
-        const url = URL.createObjectURL(blob)
-        const link = document.createElement('a')
-        link.download = `thinkflow-${rootNode.data.label}-${Date.now()}.md`
-        link.href = url
-        link.click()
-        URL.revokeObjectURL(url)
-    }
-
-    /**
-     * 图谱对话状态
-     */
-    const showChatSidebar = ref(false)
-    const isChatting = ref(false)
-    const graphChatMessages = ref<{ role: 'user' | 'assistant'; content: string }[]>([])
-
-    /**
-     * 添加便签 (Sticky Note)
-     */
-    const addStickyNote = (pos?: { x: number; y: number }) => {
-        const id = 'sticky-' + Date.now()
-        const position =
-            pos ||
-            project({
-                x: window.innerWidth / 2 - 100,
-                y: window.innerHeight / 2 - 50
-            })
-
-        addNodes({
-            id,
-            type: 'sticky',
-            position,
-            data: {
-                label: '',
-                type: 'sticky'
-            }
-        })
-    }
-
-    /**
-     * 与图谱对话 (Chat with Graph)
-     */
-    const sendGraphChatMessage = async (userMessage: string) => {
-        if (!userMessage.trim() || isChatting.value) return
-
-        graphChatMessages.value.push({ role: 'user', content: userMessage })
-        isChatting.value = true
-
-        // 构建图谱上下文
-        const buildGraphContext = () => {
-            const nodesText = flowNodes.value
-                .map(n => {
-                    if (n.type === 'sticky') return `[Note]: ${n.data.label}`
-                    return `[Node]: ${n.data.label} - ${n.data.description || ''}`
-                })
-                .join('\n')
-            return nodesText
-        }
-
-        const graphContext = buildGraphContext()
-        const useConfig = apiConfig.mode === 'default' ? DEFAULT_CONFIG.chat : apiConfig.chat
-        const finalApiKey = apiConfig.mode === 'default' ? useConfig.apiKey || API_KEY : useConfig.apiKey
-
-        try {
-            const response = await fetch(useConfig.baseUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${finalApiKey}`
-                },
-                body: JSON.stringify({
-                    model: useConfig.model,
-                    stream: true,
-                    messages: [
-                        {
-                            role: 'system',
-                            content: `You are an AI assistant helping the user explore their knowledge graph. 
+        body: JSON.stringify({
+          model: useConfig.model,
+          stream: true,
+          messages: [
+            {
+              role: "system",
+              content: `You are an AI assistant helping the user explore their knowledge graph. 
                             The current graph contains the following information:
                             ${graphContext}
                             
-                            Please answer the user's questions based on this context. Be concise and insightful.`
-                        },
-                        ...graphChatMessages.value
-                    ]
-                })
-            })
+                            Please answer the user's questions based on this context. Be concise and insightful.`,
+            },
+            ...graphChatMessages.value,
+          ],
+        }),
+      });
 
-            if (!response.ok) throw new Error('Chat request failed')
+      if (!response.ok) throw new Error("Chat request failed");
 
-            // 处理流式响应
-            const reader = response.body?.getReader()
-            if (!reader) throw new Error('ReadableStream not supported')
+      // 处理流式响应
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("ReadableStream not supported");
 
-            const decoder = new TextDecoder('utf-8')
-            let assistantMessage = ''
+      const decoder = new TextDecoder("utf-8");
+      let assistantMessage = "";
 
-            // 先添加一个空的 assistant 消息占位
-            graphChatMessages.value.push({ role: 'assistant', content: '' })
-            const lastIdx = graphChatMessages.value.length - 1
+      // 先添加一个空的 assistant 消息占位
+      graphChatMessages.value.push({ role: "assistant", content: "" });
+      const lastIdx = graphChatMessages.value.length - 1;
 
-            while (true) {
-                const { done, value } = await reader.read()
-                if (done) break
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-                const chunk = decoder.decode(value, { stream: true })
-                const lines = chunk.split('\n')
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split("\n");
 
-                for (const line of lines) {
-                    if (line.startsWith('data: ')) {
-                        const dataStr = line.slice(6).trim()
-                        if (dataStr === '[DONE]') break
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const dataStr = line.slice(6).trim();
+            if (dataStr === "[DONE]") break;
 
-                        try {
-                            const data = JSON.parse(dataStr)
-                            const content = data.choices[0]?.delta?.content || ''
-                            if (content) {
-                                assistantMessage += content
-                                graphChatMessages.value[lastIdx].content = assistantMessage
-                            }
-                        } catch (e) {
-                            // 忽略解析错误
-                        }
-                    }
-                }
+            try {
+              const data = JSON.parse(dataStr);
+              const content = data.choices[0]?.delta?.content || "";
+              if (content) {
+                assistantMessage += content;
+                graphChatMessages.value[lastIdx].content = assistantMessage;
+              }
+            } catch (e) {
+              // 忽略解析错误
             }
-        } catch (error: any) {
-            console.error('Graph Chat Error:', error)
-            graphChatMessages.value.push({ role: 'assistant', content: `Error: ${getErrorMessage(error)}` })
-        } finally {
-            isChatting.value = false
+          }
         }
+      }
+    } catch (error: any) {
+      console.error("Graph Chat Error:", error);
+      graphChatMessages.value.push({
+        role: "assistant",
+        content: `Error: ${getErrorMessage(error)}`,
+      });
+    } finally {
+      isChatting.value = false;
+    }
+  };
+
+  /**
+   * 总结：基于当前所有节点信息生成一段总结文本
+   * - 结果展示在 SummaryModal
+   */
+  const generateSummary = async () => {
+    if (flowNodes.value.length === 0) return;
+
+    showSummaryModal.value = true;
+    isSummarizing.value = true;
+    summaryContent.value = "";
+
+    // 构建层级结构的文本表示，帮助 AI 更好地理解逻辑关系
+    const buildHierarchyText = () => {
+      const rootNode = flowNodes.value.find((n) => n.data.type === "root");
+      if (!rootNode) return "";
+
+      let text = `核心主题: ${rootNode.data.label}\n`;
+      if (rootNode.data.description)
+        text += `核心描述: ${rootNode.data.description}\n`;
+      text += `\n思维脉络:\n`;
+
+      const traverse = (parentId: string, level: number) => {
+        const children = flowEdges.value
+          .filter((e) => e.source === parentId)
+          .map((e) => flowNodes.value.find((n) => n.id === e.target))
+          .filter((n) => !!n);
+
+        children.forEach((child) => {
+          const indent = "  ".repeat(level);
+          text += `${indent}- ${child!.data.label}`;
+          if (child!.data.description) {
+            text += `: ${child!.data.description}`;
+          }
+          text += "\n";
+          traverse(child!.id, level + 1);
+        });
+      };
+
+      traverse(rootNode.id, 1);
+      return text;
+    };
+
+    const nodesHierarchy = buildHierarchyText();
+
+    const useConfig =
+      apiConfig.mode === "default" ? DEFAULT_CONFIG.chat : apiConfig.chat;
+    const finalApiKey =
+      apiConfig.mode === "default"
+        ? useConfig.apiKey || API_KEY
+        : useConfig.apiKey;
+
+    try {
+      const response = await fetch(useConfig.baseUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${finalApiKey}`,
+        },
+        body: JSON.stringify({
+          model: useConfig.model,
+          messages: [
+            {
+              role: "user",
+              content: t("prompts.summaryPrompt", {
+                nodes: nodesHierarchy,
+              }),
+            },
+          ],
+        }),
+      });
+
+      if (!response.ok) throw new Error("Summary request failed");
+
+      const data = await response.json();
+      summaryContent.value = data.choices[0].message.content;
+    } catch (error) {
+      console.error("Summary Generation Error:", error);
+      summaryContent.value = t("common.error.unknown");
+    } finally {
+      isSummarizing.value = false;
+    }
+  };
+
+  /**
+   * 图片：为指定节点生成配图
+   * - 节点会进入 isImageLoading 状态
+   * - 成功后写入 imageUrl，用于节点卡片与预览弹窗展示
+   */
+  const generateNodeImage = async (nodeId: string, prompt: string) => {
+    const node = flowNodes.value.find((n) => n.id === nodeId);
+    if (!node || node.data.isImageLoading) return;
+
+    updateNode(nodeId, ((n: any) => ({
+      ...n,
+      selected: true,
+      zIndex: 1000,
+    })) as any);
+
+    updateNode(nodeId, {
+      data: { ...node.data, isImageLoading: true, error: null },
+    });
+
+    const useConfig =
+      apiConfig.mode === "default" ? DEFAULT_CONFIG.image : apiConfig.image;
+    const finalApiKey =
+      apiConfig.mode === "default"
+        ? useConfig.apiKey || API_KEY
+        : useConfig.apiKey;
+
+    try {
+      const topic = node.data.label || prompt;
+      const detail = node.data.description || "";
+      const path = findPathToNode(nodeId);
+      const context =
+        path.length > 5
+          ? `... -> ${path.slice(-4).join(" -> ")}`
+          : path.join(" -> ");
+      const response = await fetch(useConfig.baseUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${finalApiKey}`,
+        },
+        body: JSON.stringify({
+          model: useConfig.model,
+          // prompt: t("prompts.image", { topic, detail, context }),
+          messages: [
+            {
+              role: "user",
+              content: t("prompts.image", { topic, detail, context }),
+            },
+          ],
+          modalities: ["image", "text"],
+        }),
+      });
+
+      if (!response.ok) {
+        const error: any = new Error("Image request failed");
+        error.status = response.status;
+        throw error;
+      }
+      const data = await response.json();
+      // 需要注意不同的生成模型返回的格式可能不同，需要根据实际情况调整
+      const imageUrl = data.choices[0].message.images[0].image_url.url;
+
+      updateNode(nodeId, {
+        data: { ...node.data, imageUrl, isImageLoading: false, error: null },
+      });
+    } catch (error: any) {
+      console.error("Image Generation Error:", error);
+      updateNode(nodeId, {
+        data: {
+          ...node.data,
+          isImageLoading: false,
+          error: getErrorMessage(error),
+        },
+      });
+    }
+  };
+
+  /**
+   * 深挖：针对某个节点生成更详细的解释/拓展内容
+   * - 若已有 detailedContent 且未展开，则直接展开（避免重复请求）
+   */
+  const deepDive = async (nodeId: string, topic: string) => {
+    const node = flowNodes.value.find((n) => n.id === nodeId);
+    if (!node) return;
+
+    updateNode(nodeId, ((n: any) => ({
+      ...n,
+      selected: true,
+      zIndex: 1000,
+    })) as any);
+
+    if (node.data.detailedContent && !node.data.isDetailExpanded) {
+      updateNode(nodeId, { data: { ...node.data, isDetailExpanded: true } });
+      return;
     }
 
-    /**
-     * 总结：基于当前所有节点信息生成一段总结文本
-     * - 结果展示在 SummaryModal
-     */
-    const generateSummary = async () => {
-        if (flowNodes.value.length === 0) return
+    if (node.data.isDeepDiving) return;
 
-        showSummaryModal.value = true
-        isSummarizing.value = true
-        summaryContent.value = ''
+    updateNode(nodeId, {
+      data: {
+        ...node.data,
+        isDeepDiving: true,
+        isDetailExpanded: true,
+        error: null,
+      },
+    });
 
-        // 构建层级结构的文本表示，帮助 AI 更好地理解逻辑关系
-        const buildHierarchyText = () => {
-            const rootNode = flowNodes.value.find(n => n.data.type === 'root')
-            if (!rootNode) return ''
+    const useConfig =
+      apiConfig.mode === "default" ? DEFAULT_CONFIG.chat : apiConfig.chat;
+    const finalApiKey =
+      apiConfig.mode === "default"
+        ? useConfig.apiKey || API_KEY
+        : useConfig.apiKey;
 
-            let text = `核心主题: ${rootNode.data.label}\n`
-            if (rootNode.data.description) text += `核心描述: ${rootNode.data.description}\n`
-            text += `\n思维脉络:\n`
+    try {
+      const rootNode = flowNodes.value.find((n) => n.data.type === "root");
+      const rootTopic = rootNode?.data?.label || "";
+      const detail = node.data.description || "";
+      const path = findPathToNode(nodeId);
+      const context = path.join(" -> ");
 
-            const traverse = (parentId: string, level: number) => {
-                const children = flowEdges.value
-                    .filter(e => e.source === parentId)
-                    .map(e => flowNodes.value.find(n => n.id === e.target))
-                    .filter(n => !!n)
+      const response = await fetch(useConfig.baseUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${finalApiKey}`,
+        },
+        body: JSON.stringify({
+          model: useConfig.model,
+          messages: [
+            {
+              role: "system",
+              content:
+                aiStyle.value === "creative"
+                  ? t("prompts.styleCreative")
+                  : t("prompts.stylePrecise"),
+            },
+            {
+              role: "user",
+              content: t("prompts.deepDivePrompt", {
+                rootTopic,
+                context,
+                topic,
+                detail,
+              }),
+            },
+          ],
+        }),
+      });
 
-                children.forEach(child => {
-                    const indent = '  '.repeat(level)
-                    text += `${indent}- ${child!.data.label}`
-                    if (child!.data.description) {
-                        text += `: ${child!.data.description}`
-                    }
-                    text += '\n'
-                    traverse(child!.id, level + 1)
-                })
-            }
+      if (!response.ok) {
+        const error: any = new Error("Deep dive request failed");
+        error.status = response.status;
+        throw error;
+      }
+      const data = await response.json();
+      const content = data.choices[0].message.content;
 
-            traverse(rootNode.id, 1)
-            return text
-        }
-
-        const nodesHierarchy = buildHierarchyText()
-
-        const useConfig = apiConfig.mode === 'default' ? DEFAULT_CONFIG.chat : apiConfig.chat
-        const finalApiKey = apiConfig.mode === 'default' ? useConfig.apiKey || API_KEY : useConfig.apiKey
-
-        try {
-            const response = await fetch(useConfig.baseUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${finalApiKey}`
-                },
-                body: JSON.stringify({
-                    model: useConfig.model,
-                    messages: [
-                        {
-                            role: 'user',
-                            content: t('prompts.summaryPrompt', {
-                                nodes: nodesHierarchy
-                            })
-                        }
-                    ]
-                })
-            })
-
-            if (!response.ok) throw new Error('Summary request failed')
-
-            const data = await response.json()
-            summaryContent.value = data.choices[0].message.content
-        } catch (error) {
-            console.error('Summary Generation Error:', error)
-            summaryContent.value = t('common.error.unknown')
-        } finally {
-            isSummarizing.value = false
-        }
+      updateNode(nodeId, {
+        data: {
+          ...node.data,
+          detailedContent: content,
+          isDeepDiving: false,
+          error: null,
+        },
+      });
+    } catch (error: any) {
+      console.error("Deep Dive Error:", error);
+      updateNode(nodeId, {
+        data: {
+          ...node.data,
+          isDeepDiving: false,
+          error: getErrorMessage(error),
+        },
+      });
     }
+  };
 
-    /**
-     * 图片：为指定节点生成配图
-     * - 节点会进入 isImageLoading 状态
-     * - 成功后写入 imageUrl，用于节点卡片与预览弹窗展示
-     */
-    const generateNodeImage = async (nodeId: string, prompt: string) => {
-        const node = flowNodes.value.find(n => n.id === nodeId)
-        if (!node || node.data.isImageLoading) return
+  /**
+   * 生成从根到指定节点的“上下文路径”文本，用于二次扩展时给模型更明确的上下文
+   */
+  const findPathToNode = (nodeId: string): string[] => {
+    const path: string[] = [];
+    let currentId = nodeId;
 
-        updateNode(nodeId, ((n: any) => ({ ...n, selected: true, zIndex: 1000 })) as any)
-
-        updateNode(nodeId, { data: { ...node.data, isImageLoading: true, error: null } })
-
-        const useConfig = apiConfig.mode === 'default' ? DEFAULT_CONFIG.image : apiConfig.image
-        const finalApiKey = apiConfig.mode === 'default' ? useConfig.apiKey || API_KEY : useConfig.apiKey
-
-        try {
-            const topic = node.data.label || prompt
-            const detail = node.data.description || ''
-            const path = findPathToNode(nodeId)
-            const context = path.length > 5 ? `... -> ${path.slice(-4).join(' -> ')}` : path.join(' -> ')
-            const response = await fetch(useConfig.baseUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${finalApiKey}`
-                },
-                body: JSON.stringify({
-                    model: useConfig.model,
-                    prompt: t('prompts.image', { topic, detail, context })
-                })
-            })
-
-            if (!response.ok) {
-                const error: any = new Error('Image request failed')
-                error.status = response.status
-                throw error
-            }
-            const data = await response.json()
-            const imageUrl = data.data[0].url
-
-            updateNode(nodeId, { data: { ...node.data, imageUrl, isImageLoading: false, error: null } })
-        } catch (error: any) {
-            console.error('Image Generation Error:', error)
-            updateNode(nodeId, { data: { ...node.data, isImageLoading: false, error: getErrorMessage(error) } })
-        }
+    while (currentId) {
+      const node = flowNodes.value.find((n) => n.id === currentId);
+      if (node) {
+        path.unshift(`${node.data.label} (${node.data.description})`);
+        const edge = flowEdges.value.find((e) => e.target === currentId);
+        currentId = edge ? edge.source : "";
+      } else {
+        break;
+      }
     }
+    return path;
+  };
 
-    /**
-     * 深挖：针对某个节点生成更详细的解释/拓展内容
-     * - 若已有 detailedContent 且未展开，则直接展开（避免重复请求）
-     */
-    const deepDive = async (nodeId: string, topic: string) => {
-        const node = flowNodes.value.find(n => n.id === nodeId)
-        if (!node) return
+  /**
+   * 将模型返回的子节点数组写入画布，并连边到 parentId
+   */
+  const processSubNodes = (
+    subNodes: any[],
+    parentId: string,
+    baseX: number,
+    baseY: number,
+  ) => {
+    subNodes.forEach((item: any, index: number) => {
+      const childId = `node-${Date.now()}-${index}`;
+      const offsetX = 450;
+      const offsetY = (index - (subNodes.length - 1) / 2) * 280;
 
-        updateNode(nodeId, ((n: any) => ({ ...n, selected: true, zIndex: 1000 })) as any)
+      addNodes({
+        id: childId,
+        type: "window",
+        position: { x: baseX + offsetX, y: baseY + offsetY },
+        data: {
+          label: item.text,
+          description: item.description,
+          type: "child",
+          followUp: "",
+          isExpanding: false,
+          isImageLoading: false,
+          isTitleExpanded: false,
+          error: null,
+        },
+        sourcePosition: Position.Right,
+        targetPosition: Position.Left,
+      });
 
-        if (node.data.detailedContent && !node.data.isDetailExpanded) {
-            updateNode(nodeId, { data: { ...node.data, isDetailExpanded: true } })
-            return
-        }
+      addEdges({
+        id: `e-${parentId}-${childId}`,
+        source: parentId,
+        target: childId,
+        animated: true,
+        type: config.edgeType,
+        style: { stroke: config.edgeColor, strokeWidth: 2 },
+        markerEnd: MarkerType.ArrowClosed,
+      });
+    });
+  };
 
-        if (node.data.isDeepDiving) return
+  /**
+   * 生成/扩展节点
+   * - 无 parentNode：创建 root 节点并生成概述（不自动生成子节点）
+   * - 有 parentNode：基于用户追问生成单个回答节点（塞尔达式探索）
+   *
+   * 接口约定：
+   * - 根节点：返回 { overview: "..." } JSON
+   * - 追问节点：返回纯文本回答（使用 answerPrompt）
+   */
+  const expandIdea = async (param?: any, customInput?: string) => {
+    const parentNode = param && param.id ? param : undefined;
+    const text =
+      customInput || (parentNode ? parentNode.data.label : ideaInput.value);
 
-        updateNode(nodeId, { data: { ...node.data, isDeepDiving: true, isDetailExpanded: true, error: null } })
+    if (!text || (parentNode ? parentNode.data.isExpanding : isLoading.value))
+      return;
 
-        const useConfig = apiConfig.mode === 'default' ? DEFAULT_CONFIG.chat : apiConfig.chat
-        const finalApiKey = apiConfig.mode === 'default' ? useConfig.apiKey || API_KEY : useConfig.apiKey
+    let currentParentId = parentNode?.id;
 
-        try {
-            const rootNode = flowNodes.value.find(n => n.data.type === 'root')
-            const rootTopic = rootNode?.data?.label || ''
-            const detail = node.data.description || ''
-            const path = findPathToNode(nodeId)
-            const context = path.join(' -> ')
+    if (!parentNode) {
+      // ========== 根节点：首次探索 ==========
+      isLoading.value = true;
+      setNodes([]);
+      setEdges([]);
 
-            const response = await fetch(useConfig.baseUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${finalApiKey}`
-                },
-                body: JSON.stringify({
-                    model: useConfig.model,
-                    messages: [
-                        { role: 'system', content: aiStyle.value === 'creative' ? t('prompts.styleCreative') : t('prompts.stylePrecise') },
-                        { role: 'user', content: t('prompts.deepDivePrompt', { rootTopic, context, topic, detail }) }
-                    ]
-                })
-            })
+      const rootId = "root-" + Date.now();
+      currentParentId = rootId;
 
-            if (!response.ok) {
-                const error: any = new Error('Deep dive request failed')
-                error.status = response.status
-                throw error
-            }
-            const data = await response.json()
-            const content = data.choices[0].message.content
+      addNodes({
+        id: rootId,
+        type: "window",
+        position: project({
+          x: window.innerWidth / 2 - 140,
+          y: window.innerHeight / 2 - 90,
+        }),
+        data: {
+          label: text,
+          description: t("node.coreIdea"),
+          type: "root",
+          isExpanding: true,
+          isTitleExpanded: false,
+          followUp: "",
+          error: null,
+        },
+        sourcePosition: Position.Right,
+        targetPosition: Position.Left,
+      });
 
-            updateNode(nodeId, { data: { ...node.data, detailedContent: content, isDeepDiving: false, error: null } })
-        } catch (error: any) {
-            console.error('Deep Dive Error:', error)
-            updateNode(nodeId, { data: { ...node.data, isDeepDiving: false, error: getErrorMessage(error) } })
-        }
-    }
+      setTimeout(() => {
+        fitView({ nodes: [rootId], padding: 0.4, duration: 600, maxZoom: 1.2 });
+      }, 50);
 
-    /**
-     * 生成从根到指定节点的“上下文路径”文本，用于二次扩展时给模型更明确的上下文
-     */
-    const findPathToNode = (nodeId: string): string[] => {
-        const path: string[] = []
-        let currentId = nodeId
+      ideaInput.value = "";
 
-        while (currentId) {
-            const node = flowNodes.value.find(n => n.id === currentId)
-            if (node) {
-                path.unshift(`${node.data.label} (${node.data.description})`)
-                const edge = flowEdges.value.find(e => e.target === currentId)
-                currentId = edge ? edge.source : ''
-            } else {
-                break
-            }
-        }
-        return path
-    }
+      // 调用AI获取概述
+      const systemPrompt =
+        t("prompts.system") +
+        "\n" +
+        (aiStyle.value === "creative"
+          ? t("prompts.styleCreative")
+          : t("prompts.stylePrecise"));
+      const userMessage = `${t("prompts.coreIdeaPrefix")}: ${text}`;
 
-    /**
-     * 将模型返回的子节点数组写入画布，并连边到 parentId
-     */
-    const processSubNodes = (subNodes: any[], parentId: string, baseX: number, baseY: number) => {
-        subNodes.forEach((item: any, index: number) => {
-            const childId = `node-${Date.now()}-${index}`
-            const offsetX = 450
-            const offsetY = (index - (subNodes.length - 1) / 2) * 280
+      const useConfig =
+        apiConfig.mode === "default" ? DEFAULT_CONFIG.chat : apiConfig.chat;
+      const finalApiKey =
+        apiConfig.mode === "default"
+          ? useConfig.apiKey || API_KEY
+          : useConfig.apiKey;
 
-            addNodes({
-                id: childId,
-                type: 'window',
-                position: { x: baseX + offsetX, y: baseY + offsetY },
-                data: {
-                    label: item.text,
-                    description: item.description,
-                    type: 'child',
-                    followUp: '',
-                    isExpanding: false,
-                    isImageLoading: false,
-                    isTitleExpanded: false,
-                    error: null
-                },
-                sourcePosition: Position.Right,
-                targetPosition: Position.Left
-            })
+      try {
+        const response = await fetch(useConfig.baseUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${finalApiKey}`,
+          },
+          body: JSON.stringify({
+            model: useConfig.model,
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userMessage },
+            ],
+            response_format: { type: "json_object" },
+            temperature: 0.8,
+          }),
+        });
 
-            addEdges({
-                id: `e-${parentId}-${childId}`,
-                source: parentId,
-                target: childId,
-                animated: true,
-                type: config.edgeType,
-                style: { stroke: config.edgeColor, strokeWidth: 2 },
-                markerEnd: MarkerType.ArrowClosed
-            })
-        })
-    }
-
-    /**
-     * 生成/扩展节点
-     * - 无 parentNode：创建 root 节点并生成第一层子节点
-     * - 有 parentNode：基于选中节点生成下一层子节点（支持 followUp 作为追加需求）
-     *
-     * 接口约定：
-     * - chat completion 返回 message.content 为 JSON 字符串
-     * - response_format: { type: 'json_object' } 用于提高 JSON 输出稳定性
-     */
-    const expandIdea = async (param?: any, customInput?: string) => {
-        const parentNode = param && param.id ? param : undefined
-        const text = customInput || (parentNode ? parentNode.data.label : ideaInput.value)
-
-        if (!text || (parentNode ? parentNode.data.isExpanding : isLoading.value)) return
-
-        let currentParentId = parentNode?.id
-
-        if (!parentNode) {
-            isLoading.value = true
-            setNodes([])
-            setEdges([])
-
-            const rootId = 'root-' + Date.now()
-            currentParentId = rootId
-
-            addNodes({
-                id: rootId,
-                type: 'window',
-                position: project({
-                    x: window.innerWidth / 2 - 140,
-                    y: window.innerHeight / 2 - 90
-                }),
-                data: {
-                    label: text,
-                    description: t('node.coreIdea'),
-                    type: 'root',
-                    isExpanding: true,
-                    isTitleExpanded: false,
-                    followUp: '',
-                    error: null
-                },
-                sourcePosition: Position.Right,
-                targetPosition: Position.Left
-            })
-
-            // 初始添加根节点时进行一次较大的缩放，突出根节点
-            setTimeout(() => {
-                fitView({ nodes: [rootId], padding: 0.4, duration: 600, maxZoom: 1.2 })
-            }, 50)
-
-            ideaInput.value = ''
-        } else {
-            const node = flowNodes.value.find(n => n.id === parentNode.id)
-            if (node) {
-                updateNode(parentNode.id, {
-                    data: {
-                        ...node.data,
-                        isExpanding: true,
-                        // 保持当前的 isDetailExpanded 状态，不强制关闭详情
-                        error: null
-                    }
-                })
-            }
+        if (!response.ok) {
+          const error: any = new Error("AI request failed");
+          error.status = response.status;
+          throw error;
         }
 
-        const systemPrompt = t('prompts.system') + '\n' + (aiStyle.value === 'creative' ? t('prompts.styleCreative') : t('prompts.stylePrecise'))
+        const data = await response.json();
+        const result = JSON.parse(data.choices[0].message.content);
 
-        let userMessage = ''
-        if (parentNode) {
-            const path = findPathToNode(parentNode.id)
-            userMessage = `[${t('prompts.contextPath')}]: ${path.join(' -> ')}\n[${t('prompts.selectedNode')}]: ${parentNode.data.label}\n[${t('prompts.newRequirement')}]: ${customInput || t('prompts.continue')}`
-        } else {
-            userMessage = `${t('prompts.coreIdeaPrefix')}: ${text}`
+        // 根节点恢复批量生成子节点
+        const rootNode = flowNodes.value.find((n) => n.id === rootId);
+        if (rootNode) {
+          updateNode(rootId, {
+            data: {
+              ...rootNode.data,
+              isExpanding: false,
+              error: null,
+            },
+          });
         }
 
-        const useConfig = apiConfig.mode === 'default' ? DEFAULT_CONFIG.chat : apiConfig.chat
-        const finalApiKey = apiConfig.mode === 'default' ? useConfig.apiKey || API_KEY : useConfig.apiKey
+        const startX = rootNode ? rootNode.position.x : 50;
+        const startY = rootNode ? rootNode.position.y : 300;
 
-        try {
-            const response = await fetch(useConfig.baseUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${finalApiKey}`
-                },
-                body: JSON.stringify({
-                    model: useConfig.model,
-                    messages: [
-                        { role: 'system', content: systemPrompt },
-                        { role: 'user', content: userMessage }
-                    ],
-                    response_format: { type: 'json_object' },
-                    temperature: 0.8
-                })
-            })
+        // 生成子节点
+        processSubNodes(result.nodes, rootId, startX, startY);
 
-            if (!response.ok) {
-                const error: any = new Error('AI request failed')
-                error.status = response.status
-                throw error
-            }
-            const data = await response.json()
-            const result = JSON.parse(data.choices[0].message.content)
+        setTimeout(() => {
+          const childEdges = flowEdges.value.filter((e) => e.source === rootId);
+          const childIds = childEdges.map((e) => e.target);
+          const nodesToFit = [rootId, ...childIds];
 
-            // 如果是重新扩展已有节点，先清空其现有的所有后代节点
-            if (parentNode && currentParentId) {
-                removeDescendants(currentParentId)
-            }
-
-            const parentNodeObj = flowNodes.value.find(n => n.id === currentParentId)
-            const startX = parentNodeObj ? parentNodeObj.position.x : 50
-            const startY = parentNodeObj ? parentNodeObj.position.y : 300
-
-            processSubNodes(result.nodes, currentParentId, startX, startY)
-
-            if (!parentNode) {
-                setTimeout(() => {
-                    const childEdges = flowEdges.value.filter(e => e.source === currentParentId)
-                    const childIds = childEdges.map(e => e.target)
-
-                    const nodesToFit = [currentParentId, ...childIds]
-
-                    fitView({
-                        nodes: nodesToFit,
-                        padding: 0.15, // 极小边距，使内容充满屏幕
-                        duration: 1000,
-                        maxZoom: 1.2 // 允许更大的缩放
-                    })
-                }, 100)
-            }
-        } catch (error: any) {
-            console.error('Expansion Error:', error)
-            const node = flowNodes.value.find(n => n.id === currentParentId)
-            if (node) {
-                updateNode(currentParentId, { data: { ...node.data, error: getErrorMessage(error) } })
-            }
-        } finally {
-            const node = flowNodes.value.find(n => n.id === currentParentId)
-            if (node) {
-                node.data.isExpanding = false
-            }
-            isLoading.value = false
+          fitView({
+            nodes: nodesToFit,
+            padding: 0.15,
+            duration: 1000,
+            maxZoom: 1.2,
+          });
+        }, 100);
+      } catch (error: any) {
+        console.error("Root Expansion Error:", error);
+        const node = flowNodes.value.find((n) => n.id === rootId);
+        if (node) {
+          updateNode(rootId, {
+            data: {
+              ...node.data,
+              error: getErrorMessage(error),
+              isExpanding: false,
+            },
+          });
         }
-    }
+      } finally {
+        isLoading.value = false;
+      }
+    } else {
+      // ========== 子节点：追问探索 ==========
+      const node = flowNodes.value.find((n) => n.id === parentNode.id);
+      if (node) {
+        updateNode(parentNode.id, {
+          data: {
+            ...node.data,
+            isExpanding: true,
+            error: null,
+          },
+        });
+      }
 
-    /**
-     * 立即清空当前画布与输入，并关闭确认弹窗
-     */
-    const executeReset = () => {
-        ideaInput.value = ''
-        setNodes([])
-        setEdges([])
-        collapsedNodeIds.value = []
+      // 使用 answerPrompt 生成回答
+      const rootNode = flowNodes.value.find((n) => n.data.type === "root");
+      const rootTopic = rootNode?.data?.label || "";
+      const path = findPathToNode(parentNode.id);
+      const context = path.join(" -> ");
 
-        // 清除本地存储
-        localStorage.removeItem('thinkflow_nodes')
-        localStorage.removeItem('thinkflow_edges')
-        localStorage.removeItem('thinkflow_collapsed')
+      const answerPrompt = t("prompts.answerPrompt", {
+        rootTopic,
+        context,
+        question: customInput || t("prompts.continue"),
+      });
 
-        showResetConfirm.value = false
-    }
+      const stylePrompt =
+        aiStyle.value === "creative"
+          ? t("prompts.styleCreative")
+          : t("prompts.stylePrecise");
 
-    /**
-     * 新会话入口
-     * - 若当前已有节点：弹出二次确认
-     * - 若为空：直接清空（等价 executeReset）
-     */
-    const startNewSession = () => {
-        if (flowNodes.value.length > 0) {
-            showResetConfirm.value = true
-            return
+      const useConfig =
+        apiConfig.mode === "default" ? DEFAULT_CONFIG.chat : apiConfig.chat;
+      const finalApiKey =
+        apiConfig.mode === "default"
+          ? useConfig.apiKey || API_KEY
+          : useConfig.apiKey;
+
+      try {
+        const response = await fetch(useConfig.baseUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${finalApiKey}`,
+          },
+          body: JSON.stringify({
+            model: useConfig.model,
+            messages: [
+              { role: "system", content: stylePrompt },
+              { role: "user", content: answerPrompt },
+            ],
+            temperature: 0.8,
+          }),
+        });
+
+        if (!response.ok) {
+          const error: any = new Error("AI request failed");
+          error.status = response.status;
+          throw error;
         }
-        executeReset()
-    }
 
-    return {
-        apiConfig,
-        DEFAULT_CONFIG,
-        showSettings,
-        ideaInput,
-        isLoading,
-        previewImageUrl,
-        showResetConfirm,
-        showSummaryModal,
-        isSummarizing,
-        summaryContent,
-        panOnDrag,
-        isSpacePressed,
-        config,
-        flowNodes,
-        flowEdges,
-        activeNodeId,
-        activePath,
-        updateNode,
-        fitView,
-        resetLayout,
-        centerRoot,
-        handleNodeDrag,
-        alignmentGuides,
-        viewport,
-        toggleSubtreeCollapse,
-        isSubtreeCollapsed,
-        startNewSession,
-        executeReset,
-        generateSummary,
-        exportMarkdown,
-        generateNodeImage,
-        deepDive,
-        expandIdea,
-        aiStyle,
-        isPresenting,
-        togglePresentation,
-        nextPresentationNode,
-        prevPresentationNode,
-        searchQuery,
-        searchResults,
-        focusNode,
-        showChatSidebar,
-        isChatting,
-        graphChatMessages,
-        addStickyNote,
-        sendGraphChatMessage,
-        removeNodes
+        const data = await response.json();
+        const answerContent = data.choices[0].message.content;
+
+        // 创建单个回答子节点
+        const childId = `node-${Date.now()}`;
+        const shortLabel =
+          customInput?.slice(0, 15) +
+            (customInput && customInput.length > 15 ? "..." : "") || "追问";
+
+        const parentNodeObj = flowNodes.value.find(
+          (n) => n.id === parentNode.id,
+        );
+        const startX = parentNodeObj ? parentNodeObj.position.x : 50;
+        const startY = parentNodeObj ? parentNodeObj.position.y : 300;
+
+        addNodes({
+          id: childId,
+          type: "window",
+          position: { x: startX + 450, y: startY },
+          data: {
+            label: shortLabel,
+            description: "",
+            type: "child",
+            detailedContent: answerContent,
+            isDetailExpanded: true,
+            followUp: "",
+            isExpanding: false,
+            isImageLoading: false,
+            isTitleExpanded: false,
+            error: null,
+          },
+          sourcePosition: Position.Right,
+          targetPosition: Position.Left,
+        });
+
+        addEdges({
+          id: `e-${parentNode.id}-${childId}`,
+          source: parentNode.id,
+          target: childId,
+          animated: true,
+          type: config.edgeType,
+          style: { stroke: config.edgeColor, strokeWidth: 2 },
+          markerEnd: MarkerType.ArrowClosed,
+        });
+
+        // 清空父节点的 followUp 输入
+        if (parentNodeObj) {
+          updateNode(parentNode.id, {
+            data: { ...parentNodeObj.data, followUp: "", isExpanding: false },
+          });
+        }
+
+        // 聚焦新节点
+        setTimeout(() => {
+          fitView({ nodes: [childId], padding: 0.5, duration: 800 });
+        }, 100);
+      } catch (error: any) {
+        console.error("Follow-up Error:", error);
+        const nodeObj = flowNodes.value.find((n) => n.id === parentNode.id);
+        if (nodeObj) {
+          updateNode(parentNode.id, {
+            data: {
+              ...nodeObj.data,
+              error: getErrorMessage(error),
+              isExpanding: false,
+            },
+          });
+        }
+      }
     }
+  };
+
+  /**
+   * 立即清空当前画布与输入，并关闭确认弹窗
+   */
+  const executeReset = () => {
+    ideaInput.value = "";
+    setNodes([]);
+    setEdges([]);
+    collapsedNodeIds.value = [];
+
+    // 清除本地存储
+    localStorage.removeItem("thinkflow_nodes");
+    localStorage.removeItem("thinkflow_edges");
+    localStorage.removeItem("thinkflow_collapsed");
+
+    showResetConfirm.value = false;
+  };
+
+  /**
+   * 新会话入口
+   * - 若当前已有节点：弹出二次确认
+   * - 若为空：直接清空（等价 executeReset）
+   */
+  const startNewSession = () => {
+    if (flowNodes.value.length > 0) {
+      showResetConfirm.value = true;
+      return;
+    }
+    executeReset();
+  };
+
+  return {
+    apiConfig,
+    DEFAULT_CONFIG,
+    showSettings,
+    ideaInput,
+    isLoading,
+    previewImageUrl,
+    showResetConfirm,
+    showSummaryModal,
+    isSummarizing,
+    summaryContent,
+    panOnDrag,
+    isSpacePressed,
+    config,
+    flowNodes,
+    flowEdges,
+    activeNodeId,
+    activePath,
+    updateNode,
+    fitView,
+    resetLayout,
+    centerRoot,
+    handleNodeDrag,
+    alignmentGuides,
+    viewport,
+    toggleSubtreeCollapse,
+    isSubtreeCollapsed,
+    startNewSession,
+    executeReset,
+    generateSummary,
+    exportMarkdown,
+    generateNodeImage,
+    deepDive,
+    expandIdea,
+    aiStyle,
+    isPresenting,
+    togglePresentation,
+    nextPresentationNode,
+    prevPresentationNode,
+    searchQuery,
+    searchResults,
+    focusNode,
+    showChatSidebar,
+    isChatting,
+    graphChatMessages,
+    addStickyNote,
+    sendGraphChatMessage,
+    removeNodes,
+    deleteNode,
+  };
 }

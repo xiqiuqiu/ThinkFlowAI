@@ -784,6 +784,7 @@ export function useThinkFlow({
           setNodes(nodes);
           setEdges(edges);
           collapsedNodeIds.value = collapsed;
+          showIdeaInput.value = false; // 有数据则收起输入框
           console.log(`[ThinkFlow] 从本地缓存加载 ${nodes.length} 个节点`);
 
           setTimeout(() => {
@@ -804,6 +805,7 @@ export function useThinkFlow({
       setNodes(cloudData.nodes);
       setEdges(cloudData.edges);
       collapsedNodeIds.value = [];
+      showIdeaInput.value = false; // 有数据则收起输入框
       console.log(`[ThinkFlow] 从云端加载 ${cloudData.nodes.length} 个节点`);
 
       // 缓存到 localStorage

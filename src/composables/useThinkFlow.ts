@@ -691,6 +691,10 @@ export function useThinkFlow({
     await nextTick();
     setTimeout(() => {
       isInitialLoad.value = false;
+      // 若画布无节点，展开输入框供用户首次输入
+      if (flowNodes.value.length === 0) {
+        showIdeaInput.value = true;
+      }
     }, 300);
   });
 
@@ -1662,6 +1666,7 @@ export function useThinkFlow({
       }, 50);
 
       ideaInput.value = "";
+      showIdeaInput.value = false; // 首次提问后，收起输入框
 
       // 调用AI获取概述
       const systemPrompt =

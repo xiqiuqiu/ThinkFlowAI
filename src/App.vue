@@ -32,12 +32,27 @@ import SideNav from "./components/SideNav.vue";
 import WindowNode from "./components/WindowNode.vue";
 import StickyNoteNode from "./components/StickyNoteNode.vue";
 import GraphChatSidebar from "./components/GraphChatSidebar.vue";
+import AuthModal from "./components/AuthModal.vue";
+import ProjectSelector from "./components/ProjectSelector.vue";
+
+// 认证状态
+import { useAuth } from "./composables/useAuth";
+
+// 云存储
+import { useCloudStorage } from "./composables/useCloudStorage";
+
+// 项目管理
+import { useProjects } from "./composables/useProjects";
 
 // 业务层：统一的状态与动作入口
 import { useThinkFlow } from "./composables/useThinkFlow";
-import { computed, ref, onMounted, onUnmounted } from "vue";
+import { computed, ref, onMounted, onUnmounted, watch } from "vue";
 
 const { t, locale } = useI18n();
+
+// 认证状态
+const { isAuthenticated, initAuth, signOut, user } = useAuth();
+const showAuthModal = ref(false);
 
 /**
  * 全屏控制逻辑
@@ -119,7 +134,62 @@ const {
   sendGraphChatMessage,
   removeNodes,
   deleteNode,
+  initCloudSync,
+  loadProjectData,
+  showIdeaInput,
+  clearCanvas,
 } = useThinkFlow({ t, locale });
+
+// 云存储（增量同步）
+const {
+  saveNodesToCloud,
+  saveEdgesToCloud,
+  syncDeletions,
+  detectChanges,
+  loadFromCloud,
+  resetSyncState,
+} = useCloudStorage();
+
+// 获取当前项目
+const { currentProject, resetProject } = useProjects();
+
+// 监听登录状态，启用云端同步
+watch(
+  isAuthenticated,
+  (authenticated, wasAuthenticated) => {
+    if (authenticated) {
+      // 登录：启用云端同步
+      initCloudSync(async (nodes: any[], edges: any[]) => {
+        detectChanges(nodes, edges);
+        await Promise.all([
+          saveNodesToCloud(nodes),
+          saveEdgesToCloud(edges),
+          syncDeletions(),
+        ]);
+      });
+    } else if (wasAuthenticated) {
+      // 登出：清空画布和缓存
+      console.log("[App] 用户登出，清空画布和缓存");
+      clearCanvas();
+      resetSyncState();
+      showIdeaInput.value = true;
+    }
+  },
+  { immediate: true },
+);
+
+// 监听项目切换，加载对应项目数据
+watch(
+  () => currentProject.value,
+  async (project) => {
+    if (project && isAuthenticated.value) {
+      // 重置同步状态
+      resetSyncState();
+      // 加载项目数据
+      await loadProjectData(project.id, loadFromCloud);
+    }
+  },
+);
 
 /**
  * 演示模式与全屏联动
@@ -164,6 +234,8 @@ const handlePresentationKeydown = (e: KeyboardEvent) => {
 onMounted(() => {
   document.addEventListener("fullscreenchange", handleFullscreenChange);
   window.addEventListener("keydown", handlePresentationKeydown);
+  // 初始化认证状态
+  initAuth();
 });
 
 onUnmounted(() => {
@@ -227,6 +299,10 @@ const fitToView = () => {
       :searchResults="searchResults"
       :onFocusNode="focusNode"
       :onToggleChat="() => (showChatSidebar = !showChatSidebar)"
+      :isAuthenticated="isAuthenticated"
+      :user="user"
+      :onShowAuthModal="() => (showAuthModal = true)"
+      :onSignOut="signOut"
       @toggle-locale="toggleLocale"
     />
 
@@ -321,6 +397,8 @@ const fitToView = () => {
             :toggleSubtreeCollapse="toggleSubtreeCollapse"
             :isSubtreeCollapsed="isSubtreeCollapsed"
             :deleteNode="deleteNode"
+            :isAuthenticated="isAuthenticated"
+            :onShowAuthModal="() => (showAuthModal = true)"
             @preview="previewImageUrl = $event"
           />
         </template>
@@ -383,6 +461,9 @@ const fitToView = () => {
         :onSendMessage="sendGraphChatMessage"
         :onClose="() => (showChatSidebar = false)"
       />
+
+      <!-- 登录弹窗 -->
+      <AuthModal :show="showAuthModal" :t="t" @close="showAuthModal = false" />
     </div>
 
     <BottomBar
@@ -394,6 +475,7 @@ const fitToView = () => {
       :onToggleAiStyle="
         () => (aiStyle = aiStyle === 'creative' ? 'precise' : 'creative')
       "
+      :forceExpanded="showIdeaInput"
       @expand="expandIdea"
     />
   </div>

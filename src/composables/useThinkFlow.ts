@@ -554,9 +554,45 @@ export function useThinkFlow({
 
   const collapsedNodeIds = ref<string[]>([]);
   const isInitialLoad = ref(true);
+  const showIdeaInput = ref(false); // 显示想法输入框（新项目时）
+
+  // 云存储同步
+  const cloudSyncEnabled = ref(false);
+  let debouncedCloudSave: (() => void) | null = null;
+  let saveToCloudFn: ((nodes: any[], edges: any[]) => Promise<void>) | null =
+    null;
+
+  /**
+   * 初始化云存储同步
+   * 使用 3 秒防抖避免频繁 API 调用
+   */
+  const initCloudSync = (
+    saveToCloud: (nodes: any[], edges: any[]) => Promise<void>,
+  ) => {
+    cloudSyncEnabled.value = true;
+    saveToCloudFn = saveToCloud;
+
+    // 创建防抖保存函数（3秒内多次调用只执行最后一次）
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    debouncedCloudSave = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(async () => {
+        if (!saveToCloudFn) return;
+        try {
+          console.log("[CloudSync] 同步数据到云端...");
+          await saveToCloudFn(toRaw(flowNodes.value), toRaw(flowEdges.value));
+          console.log("[CloudSync] 同步完成");
+        } catch (error) {
+          console.error("[CloudSync] 云端同步失败:", error);
+        }
+      }, 3000); // 3秒防抖
+    };
+  };
 
   /**
    * 画布状态持久化 (Nodes, Edges, Collapsed)
+   * - 按项目隔离保存到 localStorage
+   * - 如启用云存储，同时防抖同步到云端
    */
   watch(
     [
@@ -567,19 +603,35 @@ export function useThinkFlow({
     () => {
       if (isInitialLoad.value) return;
 
-      // 使用 toRaw 确保保存的是纯 JS 对象，避免响应式代理带来的序列化问题
-      localStorage.setItem(
-        "thinkflow_nodes",
-        JSON.stringify(toRaw(flowNodes.value)),
-      );
-      localStorage.setItem(
-        "thinkflow_edges",
-        JSON.stringify(toRaw(flowEdges.value)),
-      );
-      localStorage.setItem(
-        "thinkflow_collapsed",
-        JSON.stringify(toRaw(collapsedNodeIds.value)),
-      );
+      // 按项目隔离保存到 localStorage
+      if (currentProjectId.value) {
+        const projectId = currentProjectId.value;
+        try {
+          localStorage.setItem(
+            `thinkflow_${projectId}_nodes`,
+            JSON.stringify(toRaw(flowNodes.value)),
+          );
+          localStorage.setItem(
+            `thinkflow_${projectId}_edges`,
+            JSON.stringify(toRaw(flowEdges.value)),
+          );
+          localStorage.setItem(
+            `thinkflow_${projectId}_collapsed`,
+            JSON.stringify(toRaw(collapsedNodeIds.value)),
+          );
+        } catch (error: any) {
+          if (error.name === "QuotaExceededError") {
+            console.warn("[ThinkFlow] localStorage 存储已满，仅同步到云端");
+          } else {
+            console.error("[ThinkFlow] 本地存储失败:", error);
+          }
+        }
+      }
+
+      // 如果启用了云存储，触发防抖云端保存
+      if (cloudSyncEnabled.value && debouncedCloudSave) {
+        debouncedCloudSave();
+      }
     },
     { deep: true },
   );
@@ -652,6 +704,151 @@ export function useThinkFlow({
       );
     } else {
       collapsedNodeIds.value = [...collapsedNodeIds.value, nodeId];
+    }
+  };
+
+  // 当前项目 ID（用于 localStorage 隔离）
+  const currentProjectId = ref<string | null>(null);
+
+  /**
+   * 清空画布
+   */
+  const clearCanvas = async () => {
+    setNodes([]);
+    setEdges([]);
+    collapsedNodeIds.value = [];
+    await nextTick();
+  };
+
+  /**
+   * 创建默认根节点
+   */
+  const createDefaultRoot = () => {
+    const rootNode = {
+      id: "root",
+      type: "window",
+      position: { x: 400, y: 100 },
+      data: {
+        label: t("node.mainTitle"),
+        title: t("node.mainTitle"),
+        description: "",
+        detailedContent: "",
+        imageUrl: null,
+        childrenCount: 0,
+        isExpanding: false,
+        followUp: "",
+        type: "window",
+      },
+    };
+    setNodes([rootNode]);
+    setEdges([]);
+    collapsedNodeIds.value = [];
+  };
+
+  /**
+   * 加载项目数据
+   * @param projectId 项目 ID
+   * @param loadFromCloudFn 从云端加载的函数
+   */
+  const loadProjectData = async (
+    projectId: string,
+    loadFromCloudFn: (
+      id: string,
+    ) => Promise<{ nodes: any[]; edges: any[] } | null>,
+  ) => {
+    console.log(`[ThinkFlow] 加载项目: ${projectId}`);
+
+    // 更新当前项目 ID
+    currentProjectId.value = projectId;
+    localStorage.setItem("thinkflow_current_project_id", projectId);
+
+    // 先尝试从 localStorage 加载（快速响应）
+    const localNodes = localStorage.getItem(`thinkflow_${projectId}_nodes`);
+    const localEdges = localStorage.getItem(`thinkflow_${projectId}_edges`);
+    const localCollapsed = localStorage.getItem(
+      `thinkflow_${projectId}_collapsed`,
+    );
+
+    if (localNodes && localEdges) {
+      try {
+        const nodes = JSON.parse(localNodes);
+        const edges = JSON.parse(localEdges);
+        const collapsed = localCollapsed ? JSON.parse(localCollapsed) : [];
+
+        if (nodes.length > 0) {
+          await clearCanvas();
+          setNodes(nodes);
+          setEdges(edges);
+          collapsedNodeIds.value = collapsed;
+          console.log(`[ThinkFlow] 从本地缓存加载 ${nodes.length} 个节点`);
+
+          setTimeout(() => {
+            fitView({ padding: 0.2, duration: 500 });
+          }, 100);
+          return;
+        }
+      } catch (e) {
+        console.error("[ThinkFlow] 解析本地缓存失败:", e);
+      }
+    }
+
+    // 本地无缓存，从云端加载
+    const cloudData = await loadFromCloudFn(projectId);
+
+    if (cloudData && cloudData.nodes.length > 0) {
+      await clearCanvas();
+      setNodes(cloudData.nodes);
+      setEdges(cloudData.edges);
+      collapsedNodeIds.value = [];
+      console.log(`[ThinkFlow] 从云端加载 ${cloudData.nodes.length} 个节点`);
+
+      // 缓存到 localStorage
+      localStorage.setItem(
+        `thinkflow_${projectId}_nodes`,
+        JSON.stringify(cloudData.nodes),
+      );
+      localStorage.setItem(
+        `thinkflow_${projectId}_edges`,
+        JSON.stringify(cloudData.edges),
+      );
+
+      setTimeout(() => {
+        fitView({ padding: 0.2, duration: 500 });
+      }, 100);
+    } else {
+      // 云端也没有数据，显示想法输入界面（产品核心机制）
+      console.log("[ThinkFlow] 项目无数据，展示想法输入框");
+      await clearCanvas();
+      showIdeaInput.value = true;
+    }
+  };
+
+  /**
+   * 保存当前项目到 localStorage（按项目隔离）
+   */
+  const saveToLocalStorage = () => {
+    if (!currentProjectId.value) return;
+
+    const projectId = currentProjectId.value;
+    try {
+      localStorage.setItem(
+        `thinkflow_${projectId}_nodes`,
+        JSON.stringify(toRaw(flowNodes.value)),
+      );
+      localStorage.setItem(
+        `thinkflow_${projectId}_edges`,
+        JSON.stringify(toRaw(flowEdges.value)),
+      );
+      localStorage.setItem(
+        `thinkflow_${projectId}_collapsed`,
+        JSON.stringify(toRaw(collapsedNodeIds.value)),
+      );
+    } catch (error: any) {
+      if (error.name === "QuotaExceededError") {
+        console.warn("[ThinkFlow] localStorage 存储已满");
+      } else {
+        console.error("[ThinkFlow] 本地存储失败:", error);
+      }
     }
   };
 
@@ -1765,5 +1962,14 @@ export function useThinkFlow({
     sendGraphChatMessage,
     removeNodes,
     deleteNode,
+    // 云存储相关
+    initCloudSync,
+    cloudSyncEnabled,
+    // 项目数据隔离
+    loadProjectData,
+    clearCanvas,
+    createDefaultRoot,
+    currentProjectId,
+    showIdeaInput,
   };
 }

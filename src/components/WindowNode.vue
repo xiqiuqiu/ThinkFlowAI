@@ -55,7 +55,20 @@ const props = defineProps<{
   toggleSubtreeCollapse: (id: string) => void;
   isSubtreeCollapsed: (id: string) => boolean;
   deleteNode: (id: string) => void;
+  // 游客模式限制
+  isAuthenticated: boolean;
+  onShowAuthModal: () => void;
 }>();
+
+/**
+ * 检查功能是否允许使用（非根节点需登录）
+ */
+const checkAccess = () => {
+  if (props.isAuthenticated) return true;
+  if (props.data.type === "root") return true;
+  props.onShowAuthModal();
+  return false;
+};
 
 const md = new MarkdownIt({
   html: true,
@@ -168,9 +181,10 @@ onUnmounted(() => {
  * 直接基于选中文字进行扩展（Spawn）
  */
 const handleSpawn = () => {
+  // 游客模式限制：非根节点需登录
+  if (!checkAccess()) return;
+
   // 直接调用 expandIdea，传入选中文字作为 customInput
-  // 这里的 expandIdea 参数结构需匹配 props 定义： (param?: any, customInput?: string) => void
-  // param 传入当前节点信息，customInput 传入选中文字
   props.expandIdea(
     {
       id: props.id,
@@ -472,7 +486,9 @@ const handleBlur = () => {
 
           <div class="flex items-center gap-2">
             <button
-              @click.stop="props.deepDive(props.id, props.data.label)"
+              @click.stop="
+                checkAccess() && props.deepDive(props.id, props.data.label)
+              "
               class="action-btn text-orange-500 hover:bg-orange-50"
             >
               <BookOpen class="w-2.5 h-2.5" :stroke-width="1.5" />
@@ -480,7 +496,10 @@ const handleBlur = () => {
             </button>
             <button
               v-if="!props.data.imageUrl && !props.data.isImageLoading"
-              @click.stop="props.generateNodeImage(props.id, props.data.label)"
+              @click.stop="
+                checkAccess() &&
+                props.generateNodeImage(props.id, props.data.label)
+              "
               class="action-btn text-blue-500 hover:bg-blue-50"
             >
               <ImageIcon class="w-2.5 h-2.5" :stroke-width="1.5" />
@@ -490,7 +509,7 @@ const handleBlur = () => {
         </div>
 
         <div
-          v-if="props.data.isDetailExpanded"
+          v-if="props.data.isDetailExpanded || props.data.detailedContent"
           class="mb-4 pt-4 border-t border-slate-100 animate-in fade-in slide-in-from-top-2 duration-300"
         >
           <div class="flex items-center justify-between mb-2">
@@ -578,6 +597,7 @@ const handleBlur = () => {
               @focus="handleFocus"
               @blur="handleBlur"
               @keyup.enter="
+                checkAccess() &&
                 props.expandIdea(
                   {
                     id: props.id,
@@ -593,6 +613,7 @@ const handleBlur = () => {
             />
             <button
               @click.stop="
+                checkAccess() &&
                 props.expandIdea(
                   {
                     id: props.id,

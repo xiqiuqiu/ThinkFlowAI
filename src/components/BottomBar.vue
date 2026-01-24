@@ -23,6 +23,7 @@ import {
  * - isLoading：是否正在生成（用于禁用按钮并显示 loading 图标）
  * - aiStyle: AI 思考风格
  * - onToggleAiStyle: 切换 AI 思考风格的回调
+ * - forceExpanded: 强制展开输入框（新项目时使用）
  */
 const props = defineProps<{
   t: any;
@@ -30,6 +31,7 @@ const props = defineProps<{
   isLoading: boolean;
   aiStyle: string;
   onToggleAiStyle: () => void;
+  forceExpanded?: boolean;
 }>();
 
 /**
@@ -50,6 +52,7 @@ const inputRef = ref<HTMLInputElement>();
 // 计算输入框是否应该展开
 const isExpanded = computed(
   () =>
+    props.forceExpanded ||
     isInputFocused.value ||
     isHovering.value ||
     props.modelValue.trim().length > 0,

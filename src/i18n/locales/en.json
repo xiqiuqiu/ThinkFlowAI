@@ -100,6 +100,38 @@
     "delete": "Delete"
   },
 
+  "auth": {
+    "login": "Login",
+    "register": "Register",
+    "loginDesc": "Login to sync your mind maps",
+    "registerDesc": "Create an account for cloud storage",
+    "email": "Email address",
+    "password": "Password",
+    "confirmPassword": "Confirm password",
+    "loginBtn": "Login",
+    "registerBtn": "Register",
+    "or": "or",
+    "noAccount": "Don't have an account?",
+    "hasAccount": "Already have an account?",
+    "registerNow": "Register now",
+    "loginNow": "Login now",
+    "fillAllFields": "Please fill in all fields",
+    "passwordMismatch": "Passwords do not match",
+    "unknownError": "An unknown error occurred",
+    "logout": "Logout",
+    "loginRequired": "Login required to use this feature",
+    "loginToUnlock": "Login to unlock more features"
+  },
+
+  "project": {
+    "title": "My Projects",
+    "select": "Select Project",
+    "create": "New Project",
+    "empty": "No projects yet. Click below to create one.",
+    "namePlaceholder": "Enter project name",
+    "deleteConfirm": "Are you sure you want to delete this project? This action cannot be undone."
+  },
+
   "prompts": {
     "system": "You are a mind-mapping assistant that helps users expand their ideas layer by layer into a thinking tree.\n\nWorkflow:\n1. User provides an initial idea.\n2. Understand user intent based on the [Thinking Context Path].\n3. Generate 3-5 deeper or related sub-ideas.\n4. Each sub-idea includes a short name and a minimal description.\n\nResponse format must be strict JSON:\n{\n  \"nodes\": [\n    { \"text\": \"Sub-idea 1 Name\", \"description\": \"One-sentence description\" },\n    { \"text\": \"Sub-idea 2 Name\", \"description\": \"One-sentence description\" }\n  ]\n}\n\nNote: Return ONLY JSON, no explanation.",
     "answerPrompt": "You are generating an answer for the user's follow-up question. Ground your explanation in the context path and user's question.\n\nRoot question / Core idea: {rootTopic}\nContext path (root -> current): {context}\nUser's follow-up: {question}\n\nRequirements:\n1. About 100-300 words, well-structured.\n2. Explicitly connect back to the root question.\n3. Output the body directly (Markdown allowed). No JSON. No opening/closing remarks.",

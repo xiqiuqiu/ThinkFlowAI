@@ -138,6 +138,7 @@ const {
   loadProjectData,
   showIdeaInput,
   clearCanvas,
+  flowEdges,
 } = useThinkFlow({ t, locale });
 
 // 云存储（增量同步）
@@ -151,14 +152,66 @@ const {
 } = useCloudStorage();
 
 // 获取当前项目
-const { currentProject, resetProject } = useProjects();
+const { currentProject, resetProject, createProject, selectProject } =
+  useProjects();
 
 // 监听登录状态，启用云端同步
 watch(
   isAuthenticated,
-  (authenticated, wasAuthenticated) => {
-    if (authenticated) {
-      // 登录：启用云端同步
+  async (authenticated, wasAuthenticated) => {
+    if (authenticated && !wasAuthenticated) {
+      // 从游客切换为登录用户
+      const guestNodes = flowNodes.value;
+      const guestEdges = flowEdges.value;
+      const hasGuestData = guestNodes.length > 0;
+
+      if (hasGuestData) {
+        // 游客有数据，自动保存为新项目
+        console.log("[App] 检测到游客数据，自动创建项目保存");
+        try {
+          const timestamp = new Date().toLocaleString("zh-CN", {
+            month: "short",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+          const newProject = await createProject(`游客数据 ${timestamp}`);
+          if (newProject) {
+            // 选中新项目
+            selectProject(newProject);
+            // 启用云端同步并立即保存游客数据
+            initCloudSync(async (nodes: any[], edges: any[]) => {
+              detectChanges(nodes, edges);
+              await Promise.all([
+                saveNodesToCloud(nodes),
+                saveEdgesToCloud(edges),
+                syncDeletions(),
+              ]);
+            });
+            // 立即触发一次保存
+            detectChanges(guestNodes, guestEdges);
+            await Promise.all([
+              saveNodesToCloud(guestNodes),
+              saveEdgesToCloud(guestEdges),
+            ]);
+            console.log("[App] 游客数据已保存到新项目");
+          }
+        } catch (error) {
+          console.error("[App] 保存游客数据失败:", error);
+        }
+      } else {
+        // 游客无数据，正常启用云端同步
+        initCloudSync(async (nodes: any[], edges: any[]) => {
+          detectChanges(nodes, edges);
+          await Promise.all([
+            saveNodesToCloud(nodes),
+            saveEdgesToCloud(edges),
+            syncDeletions(),
+          ]);
+        });
+      }
+    } else if (authenticated) {
+      // 已登录（页面刷新等情况）
       initCloudSync(async (nodes: any[], edges: any[]) => {
         detectChanges(nodes, edges);
         await Promise.all([

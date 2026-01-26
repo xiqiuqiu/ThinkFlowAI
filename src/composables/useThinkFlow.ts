@@ -773,6 +773,14 @@ export function useThinkFlow({
   ) => {
     console.log(`[ThinkFlow] 加载项目: ${projectId}`);
 
+    // 先清空画布，防止旧数据残留
+    await clearCanvas();
+
+    // 清除旧版通用缓存（非项目隔离的遗留数据）
+    localStorage.removeItem("thinkflow_nodes");
+    localStorage.removeItem("thinkflow_edges");
+    localStorage.removeItem("thinkflow_collapsed");
+
     // 更新当前项目 ID
     currentProjectId.value = projectId;
     localStorage.setItem("thinkflow_current_project_id", projectId);

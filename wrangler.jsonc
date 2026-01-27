@@ -1,0 +1,20 @@
+{
+  "name": "omnimind-v1",
+  "compatibility_date": "2026-01-21",
+  "main": "src/worker.js",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS"
+  },
+  // 敏感变量请配置于 .dev.vars 文件（本地）或 Cloudflare Dashboard（生产）
+  "vars": {
+    "VITE_SUPABASE_URL": "",
+    "VITE_SUPABASE_ANON_KEY": "",
+    "VITE_CHAT_BASE_URL": "",
+    "VITE_CHAT_MODEL": "",
+    "VITE_CHAT_API_KEY": "",
+    "VITE_IMAGE_BASE_URL": "",
+    "VITE_IMAGE_MODEL": "",
+    "VITE_IMAGE_API_KEY": ""
+  }
+}

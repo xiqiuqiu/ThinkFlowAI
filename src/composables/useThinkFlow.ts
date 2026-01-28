@@ -1883,7 +1883,7 @@ export function useThinkFlow({
         }),
         data: {
           label: text,
-          description: t("node.coreIdea"),
+          description: "",
           type: "root",
           isExpanding: true,
           isTitleExpanded: false,
@@ -1950,6 +1950,7 @@ export function useThinkFlow({
           updateNode(rootId, {
             data: {
               ...rootNode.data,
+              description: result.overview || "",
               isExpanding: false,
               error: null,
             },

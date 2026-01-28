@@ -174,13 +174,15 @@ const callAndClose = (fn: () => void) => {
 
 <template>
   <nav
-    class="flex-none bg-white/80 backdrop-blur-md border-b border-slate-200 px-3 md:px-6 py-2 md:py-3 flex items-center justify-between shadow-sm z-50"
+    class="flex-none glass border-b border-white/20 px-3 md:px-6 py-2 md:py-3 flex items-center justify-between z-40"
   >
     <div class="flex items-center gap-2 md:gap-6 flex-grow mr-2">
       <div class="flex items-center gap-2 flex-shrink-0">
-        <div class="w-3 h-3 bg-orange-500 rounded-sm rotate-45"></div>
+        <div
+          class="w-3 h-3 bg-gradient-to-br from-primary to-primary-dark rounded-sm rotate-45"
+        ></div>
         <span
-          class="font-black text-slate-900 tracking-tighter text-base md:text-lg"
+          class="font-heading font-bold text-gradient tracking-tighter text-base md:text-lg"
           >OmniMind</span
         >
       </div>

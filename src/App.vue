@@ -329,7 +329,7 @@ const fitToView = () => {
 
 <template>
   <div
-    class="h-screen w-screen bg-white font-mono text-slate-800 relative overflow-hidden flex flex-col selection:bg-orange-100"
+    class="h-screen w-screen bg-gradient-to-br from-slate-50 via-white to-primary-50/30 dark:from-slate-900 dark:via-slate-800 dark:to-primary-900/20 font-body text-slate-800 dark:text-slate-100 relative overflow-hidden flex flex-col selection:bg-primary-100 dark:selection:bg-primary-900/50"
   >
     <!-- TODO: 暂时隐藏api设置  -->
     <TopNav

@@ -780,7 +780,12 @@ const handleExpandClick = () => {
 }
 
 .window-node {
-  @apply relative bg-white border-2 rounded-2xl overflow-hidden shadow-xl;
+  @apply relative rounded-2xl overflow-hidden;
+  background: var(--bg-glass);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 2px solid var(--border-glass);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.1);
   min-width: 280px;
   max-width: 600px;
   transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);

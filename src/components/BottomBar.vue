@@ -102,15 +102,24 @@ const handleBallClick = () => {
   <div
     class="fixed bottom-4 md:bottom-4 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-3 w-full max-w-2xl px-4 md:px-6"
   >
-    <div class="flex items-center gap-2 md:gap-3 w-full relative">
+    <div
+      class="flex items-center gap-2 md:gap-3 w-full relative"
+      @mouseenter="handleContainerMouseEnter"
+      @mouseleave="handleContainerMouseLeave"
+    >
       <div
         :class="[
-          'flex items-center gap-2 md:gap-3 bg-slate-50 border border-slate-200 px-3 md:px-5 py-2 md:py-3 focus-within:bg-white focus-within:shadow-xl focus-within:shadow-slate-100',
-          'transition-all duration-500 ease-out transform-gpu',
+          'flex items-center gap-2 md:gap-3 bg-slate-50/80 backdrop-blur-xl border border-slate-200/60 px-3 md:px-5 py-2 md:py-3',
+          'focus-within:bg-white/90 focus-within:shadow-2xl focus-within:shadow-slate-200/50 focus-within:border-slate-300/80',
+          'transform-gpu will-change-transform',
           isExpanded
             ? 'opacity-100 scale-100 rounded-xl md:rounded-2xl w-full'
-            : 'opacity-0 scale-95 rounded-full w-0 pointer-events-none',
+            : 'opacity-0 scale-90 rounded-full w-0 pointer-events-none',
         ]"
+        :style="{
+          transition:
+            'all 700ms cubic-bezier(0.23, 1, 0.32, 1), opacity 500ms cubic-bezier(0.23, 1, 0.32, 1)',
+        }"
       >
         <Terminal class="w-4 h-4 md:w-5 h-5 text-slate-400 flex-shrink-0" />
         <input
@@ -171,14 +180,18 @@ const handleBallClick = () => {
       <div
         :class="[
           'absolute left-1/2 -translate-x-1/2 -bottom-2',
-          'w-12 h-12 md:w-14 md:h-14 bg-gradient-to-br from-slate-100 to-slate-200 border border-slate-300',
-          'rounded-full cursor-pointer shadow-lg hover:shadow-xl',
-          'transition-all duration-500 ease-out transform-gpu',
+          'w-12 h-12 md:w-14 md:h-14 bg-gradient-to-br from-slate-100/90 to-slate-200/90 backdrop-blur-lg border border-slate-300/60',
+          'rounded-full cursor-pointer shadow-lg hover:shadow-2xl',
+          'transform-gpu will-change-transform',
           'flex items-center justify-center group',
           !isExpanded
-            ? 'opacity-100 scale-100 hover:scale-110'
-            : 'opacity-0 scale-75 pointer-events-none',
+            ? 'opacity-100 scale-100 hover:scale-105'
+            : 'opacity-0 scale-50 pointer-events-none',
         ]"
+        :style="{
+          transition:
+            'all 600ms cubic-bezier(0.23, 1, 0.32, 1), opacity 400ms cubic-bezier(0.23, 1, 0.32, 1)',
+        }"
         @click="handleBallClick"
       >
         <!-- 球内的图标 -->

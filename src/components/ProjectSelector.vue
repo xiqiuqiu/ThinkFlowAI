@@ -76,9 +76,15 @@ watch(
   async (authenticated) => {
     if (authenticated) {
       await fetchProjects();
-      // 自动选择第一个项目
+      // 优先恢复上次选中的项目，否则选择第一个项目
       if (projects.value.length > 0 && !currentProject.value) {
-        selectProject(projects.value[0] as Project);
+        const savedProjectId = localStorage.getItem(
+          "thinkflow_current_project_id",
+        );
+        const savedProject = savedProjectId
+          ? projects.value.find((p) => p.id === savedProjectId)
+          : null;
+        selectProject((savedProject || projects.value[0]) as Project);
       }
     }
   },

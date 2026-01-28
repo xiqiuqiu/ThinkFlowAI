@@ -1008,7 +1008,9 @@ export function useThinkFlow({
    * 视图：将根节点居中显示
    */
   const centerRoot = () => {
-    const rootNode = flowNodes.value.find((n) => n.data.type === "root");
+    const rootNode = flowNodes.value.find(
+      (n) => n.id.startsWith("root") || n.data.type === "root",
+    );
     if (rootNode) {
       fitView({ nodes: [rootNode.id], padding: 2, duration: 800 });
     }
@@ -1019,7 +1021,9 @@ export function useThinkFlow({
    * - 动态计算节点宽高与子树高度，确保在节点展开（回答/生图）后仍能整齐排布
    */
   const resetLayout = () => {
-    const rootNode = flowNodes.value.find((n) => n.data.type === "root");
+    const rootNode = flowNodes.value.find(
+      (n) => n.id.startsWith("root") || n.data.type === "root",
+    );
     if (!rootNode) return;
 
     const nodeGapX = 150; // 节点层级间的横向间距
@@ -1137,7 +1141,9 @@ export function useThinkFlow({
   const exportMarkdown = () => {
     if (flowNodes.value.length === 0) return;
 
-    const rootNode = flowNodes.value.find((n) => n.data.type === "root");
+    const rootNode = flowNodes.value.find(
+      (n) => n.id.startsWith("root") || n.data.type === "root",
+    );
     if (!rootNode) return;
 
     let markdown = `# ${rootNode.data.label}\n\n`;
@@ -1182,7 +1188,7 @@ export function useThinkFlow({
     const blob = new Blob([markdown], { type: "text/markdown" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.download = `thinkflow-${rootNode.data.label}-${Date.now()}.md`;
+    link.download = `omnimind-${rootNode.data.label}-${Date.now()}.md`;
     link.href = url;
     link.click();
     URL.revokeObjectURL(url);
@@ -1196,7 +1202,9 @@ export function useThinkFlow({
   const exportHTML = () => {
     if (flowNodes.value.length === 0) return;
 
-    const rootNode = flowNodes.value.find((n) => n.data.type === "root");
+    const rootNode = flowNodes.value.find(
+      (n) => n.id.startsWith("root") || n.data.type === "root",
+    );
     if (!rootNode) return;
 
     // 复用 Markdown 生成逻辑

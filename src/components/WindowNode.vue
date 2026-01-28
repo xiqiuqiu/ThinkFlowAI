@@ -621,7 +621,14 @@ const handleBlur = () => {
         </div>
 
         <!-- AI衍生问题气泡（在 detailedContent 生成后自动显示） -->
-        <div v-if="props.data.detailedContent" class="mb-3">
+        <div
+          v-if="
+            props.data.detailedContent &&
+            (props.data.derivedQuestions?.length ||
+              props.data.isGeneratingQuestions)
+          "
+          class="mb-3"
+        >
           <div class="flex items-center mb-2">
             <span
               class="text-[9px] font-black text-slate-400 uppercase tracking-widest"

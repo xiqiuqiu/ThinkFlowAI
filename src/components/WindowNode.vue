@@ -18,6 +18,7 @@ import {
   BookOpen,
   ChevronDown,
   ChevronRight,
+  GripVertical,
   Image as ImageIcon,
   Maximize2,
   RefreshCw,
@@ -87,6 +88,44 @@ const emit = defineEmits<{
  * followUp 输入框是否聚焦（用于边框高亮）
  */
 const isFocused = ref(false);
+
+/**
+ * 节点宽度与拖拽逻辑
+ */
+const MIN_WIDTH = 280;
+const MAX_WIDTH = 600;
+const nodeWidth = ref(props.data.nodeWidth || 340);
+const isResizing = ref(false);
+
+const startResize = (e: MouseEvent) => {
+  e.stopPropagation();
+  e.preventDefault();
+  isResizing.value = true;
+  const startX = e.clientX;
+  const startWidth = nodeWidth.value;
+  const zoom = viewport.value.zoom || 1;
+
+  const onMouseMove = (moveEvt: MouseEvent) => {
+    const delta = (moveEvt.clientX - startX) / zoom;
+    nodeWidth.value = Math.min(
+      MAX_WIDTH,
+      Math.max(MIN_WIDTH, startWidth + delta),
+    );
+  };
+
+  const onMouseUp = () => {
+    isResizing.value = false;
+    document.removeEventListener("mousemove", onMouseMove);
+    document.removeEventListener("mouseup", onMouseUp);
+    // 持久化宽度
+    props.updateNode(props.id, {
+      data: { ...props.data, nodeWidth: nodeWidth.value },
+    });
+  };
+
+  document.addEventListener("mousemove", onMouseMove);
+  document.addEventListener("mouseup", onMouseUp);
+};
 
 /**
  * 文字选择相关状态
@@ -232,9 +271,10 @@ const handleBlur = () => {
         props.activePath.nodeIds.has(props.id) && !isFocused,
       'opacity-100 grayscale-0 blur-0 scale-110 z-[100] shadow-2xl ring-4 ring-offset-8':
         isFocused,
-      '!w-[450px]': props.data.isDetailExpanded,
+      resizing: isResizing,
     }"
     :style="{
+      width: props.data.isDetailExpanded ? '450px' : nodeWidth + 'px',
       borderColor:
         isFocused || props.activePath.nodeIds.has(props.id)
           ? props.config.edgeColor
@@ -260,6 +300,11 @@ const handleBlur = () => {
       :position="Position.Right"
       class="!bg-transparent !border-none"
     />
+
+    <!-- 拖拽手柄 -->
+    <div class="resize-handle nodrag" @mousedown="startResize">
+      <GripVertical class="w-3 h-3 text-slate-300" :stroke-width="1.5" />
+    </div>
 
     <div
       class="window-header"
@@ -665,8 +710,22 @@ const handleBlur = () => {
 }
 
 .window-node {
-  @apply relative w-[280px] bg-white border-2 rounded-2xl overflow-hidden shadow-xl;
+  @apply relative bg-white border-2 rounded-2xl overflow-hidden shadow-xl;
+  min-width: 280px;
+  max-width: 600px;
   transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.window-node.resizing {
+  transition: none;
+}
+
+.resize-handle {
+  @apply absolute right-0 top-1/2 -translate-y-1/2 w-4 h-12 flex items-center justify-center cursor-ew-resize opacity-0 transition-opacity;
+}
+
+.window-node:hover .resize-handle {
+  @apply opacity-100;
 }
 
 .window-header {

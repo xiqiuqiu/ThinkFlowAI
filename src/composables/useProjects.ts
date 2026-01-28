@@ -109,6 +109,11 @@ export function useProjects() {
 
       if (error) throw error;
 
+      // 清理对应的 localStorage 缓存
+      localStorage.removeItem(`thinkflow_${id}_nodes`);
+      localStorage.removeItem(`thinkflow_${id}_edges`);
+      localStorage.removeItem(`thinkflow_${id}_collapsed`);
+
       projects.value = projects.value.filter((p) => p.id !== id);
       if (currentProject.value?.id === id) {
         currentProject.value = projects.value[0] ?? null;

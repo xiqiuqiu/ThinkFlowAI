@@ -773,8 +773,20 @@ export function useThinkFlow({
   ) => {
     console.log(`[ThinkFlow] 加载项目: ${projectId}`);
 
-    // 先清空画布，防止旧数据残留
+    // 切换项目前先将 currentProjectId 置空，防止 clearCanvas 触发 watch 保存空数据到旧项目
+    const previousProjectId = currentProjectId.value;
+    currentProjectId.value = null;
+
+    // 清空画布，防止旧数据残留
     await clearCanvas();
+
+    // 清理旧项目缓存（仅保留当前项目缓存，避免 localStorage 溢出）
+    if (previousProjectId && previousProjectId !== projectId) {
+      localStorage.removeItem(`thinkflow_${previousProjectId}_nodes`);
+      localStorage.removeItem(`thinkflow_${previousProjectId}_edges`);
+      localStorage.removeItem(`thinkflow_${previousProjectId}_collapsed`);
+      console.log(`[ThinkFlow] 已清理旧项目缓存: ${previousProjectId}`);
+    }
 
     // 清除旧版通用缓存（非项目隔离的遗留数据）
     localStorage.removeItem("thinkflow_nodes");
@@ -1464,6 +1476,16 @@ export function useThinkFlow({
    * - 结果展示在 SummaryModal
    */
   const generateSummary = async () => {
+    console.log("[Summary Debug] flowNodes:", flowNodes.value);
+    console.log("[Summary Debug] flowNodes.length:", flowNodes.value.length);
+    console.log(
+      "[Summary Debug] flowNodes data.type:",
+      flowNodes.value.map((n) => ({
+        id: n.id,
+        dataType: n.data?.type,
+        label: n.data?.label,
+      })),
+    );
     if (flowNodes.value.length === 0) return;
 
     showSummaryModal.value = true;
@@ -1472,7 +1494,10 @@ export function useThinkFlow({
 
     // 构建层级结构的文本表示，帮助 AI 更好地理解逻辑关系
     const buildHierarchyText = () => {
-      const rootNode = flowNodes.value.find((n) => n.data.type === "root");
+      // 使用 id 前缀判定根节点（因 data.type 在存储加载后可能丢失）
+      const rootNode = flowNodes.value.find(
+        (n) => n.id.startsWith("root-") || n.data.type === "root",
+      );
       if (!rootNode) return "";
 
       let text = `核心主题: ${rootNode.data.label}\n`;
@@ -1502,6 +1527,11 @@ export function useThinkFlow({
     };
 
     const nodesHierarchy = buildHierarchyText();
+
+    // Debug: 检查节点层级数据和最终 prompt
+    console.log("[Summary Debug] nodesHierarchy:", nodesHierarchy);
+    const finalPrompt = t("prompts.summaryPrompt", { nodes: nodesHierarchy });
+    console.log("[Summary Debug] finalPrompt:", finalPrompt);
 
     const useConfig =
       apiConfig.mode === "default" ? DEFAULT_CONFIG.chat : apiConfig.chat;

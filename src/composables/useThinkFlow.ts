@@ -447,6 +447,28 @@ export function useThinkFlow({
   });
 
   /**
+   * 节点选中监听：打开/切换节点详情面板
+   * - 锁定模式下不自动切换
+   * - 取消选中时自动收起面板
+   */
+  watch(
+    () => activeNodeId.value,
+    (newId, oldId) => {
+      if (!newId) {
+        if (activeRightPanel.value === "nodeDetail") {
+          activeRightPanel.value = "none";
+        }
+        return;
+      }
+
+      if (isDetailPanelLocked.value && oldId) return;
+
+      selectedNodeForPanel.value = newId;
+      activeRightPanel.value = "nodeDetail";
+    },
+  );
+
+  /**
    * 获取节点的所有后代节点 ID (迭代实现，更健壮)
    */
   const getDescendantIds = (nodeId: string): Set<string> => {
@@ -492,6 +514,13 @@ export function useThinkFlow({
     removeDescendants(nodeId);
     // 再删除自身
     removeNodes([nodeId]);
+
+    if (selectedNodeForPanel.value === nodeId) {
+      selectedNodeForPanel.value = null;
+      if (activeRightPanel.value === "nodeDetail") {
+        activeRightPanel.value = "none";
+      }
+    }
   };
 
   /**
@@ -1347,9 +1376,65 @@ export function useThinkFlow({
   };
 
   /**
+   * 右侧面板状态管理
+   * - 'none': 无面板显示
+   * - 'nodeDetail': 节点详情面板
+   * - 'graphChat': 图谱对话面板
+   * 两个面板互斥，打开一个自动关闭另一个
+   */
+  type RightPanelType = "none" | "nodeDetail" | "graphChat";
+  const activeRightPanel = ref<RightPanelType>("none");
+
+  // 节点详情面板相关状态
+  const selectedNodeForPanel = ref<string | null>(null);
+  const isDetailPanelLocked = ref(false);
+
+  // 计算属性：各面板是否显示
+  const showNodeDetailPanel = computed(
+    () => activeRightPanel.value === "nodeDetail",
+  );
+  const showChatSidebar = computed(
+    () => activeRightPanel.value === "graphChat",
+  );
+
+  // 当前面板节点的完整数据
+  const panelNodeData = computed(() => {
+    if (!selectedNodeForPanel.value) return null;
+    return flowNodes.value.find((n) => n.id === selectedNodeForPanel.value);
+  });
+
+  /**
+   * 打开节点详情面板
+   */
+  const openNodeDetailPanel = (nodeId: string) => {
+    selectedNodeForPanel.value = nodeId;
+    activeRightPanel.value = "nodeDetail";
+  };
+
+  /**
+   * 打开图谱对话面板
+   */
+  const openGraphChat = () => {
+    activeRightPanel.value = "graphChat";
+  };
+
+  /**
+   * 关闭右侧面板
+   */
+  const closeRightPanel = () => {
+    activeRightPanel.value = "none";
+  };
+
+  /**
+   * 切换面板锁定状态
+   */
+  const togglePanelLock = () => {
+    isDetailPanelLocked.value = !isDetailPanelLocked.value;
+  };
+
+  /**
    * 图谱对话状态
    */
-  const showChatSidebar = ref(false);
   const isChatting = ref(false);
   const graphChatMessages = ref<
     { role: "user" | "assistant"; content: string }[]
@@ -1383,6 +1468,10 @@ export function useThinkFlow({
    */
   const sendGraphChatMessage = async (userMessage: string) => {
     if (!userMessage.trim() || isChatting.value) return;
+
+    if (activeRightPanel.value !== "graphChat") {
+      openGraphChat();
+    }
 
     graphChatMessages.value.push({ role: "user", content: userMessage });
     isChatting.value = true;
@@ -2004,7 +2093,9 @@ export function useThinkFlow({
       }
 
       // 使用 answerPrompt 生成回答
-      const rootNode = flowNodes.value.find((n) => n.data.type === "root");
+      const rootNode = flowNodes.value.find(
+        (n) => n.id.startsWith("root-") || n.data.type === "root",
+      );
       const rootTopic = rootNode?.data?.label || "";
       const path = findPathToNode(parentNode.id);
       const context = path.join(" -> ");
@@ -2013,6 +2104,15 @@ export function useThinkFlow({
         rootTopic,
         context,
         question: customInput || t("prompts.continue"),
+      });
+
+      // 调试：检查 answerPrompt 构建参数
+      console.log("[expandIdea Debug] answerPrompt 构建参数:", {
+        rootNode: rootNode?.id,
+        rootTopic,
+        context,
+        question: customInput || t("prompts.continue"),
+        answerPrompt,
       });
 
       const stylePrompt =
@@ -2040,6 +2140,7 @@ export function useThinkFlow({
               { role: "system", content: stylePrompt },
               { role: "user", content: answerPrompt },
             ],
+            response_format: { type: "json_object" },
             temperature: 0.8,
           }),
         });
@@ -2051,7 +2152,18 @@ export function useThinkFlow({
         }
 
         const data = await response.json();
-        const answerContent = data.choices[0].message.content;
+        const rawContent = data.choices[0].message.content;
+
+        // 尝试解析 JSON，失败时回退到原始文本
+        let answerContent = rawContent;
+        let summaryContent = "";
+        try {
+          const result = JSON.parse(rawContent);
+          answerContent = result.answer || rawContent;
+          summaryContent = result.summary || "";
+        } catch {
+          // JSON 解析失败，使用原始文本，摘要留空
+        }
 
         // 创建单个回答子节点
         const childId = `node-${Date.now()}`;
@@ -2071,7 +2183,7 @@ export function useThinkFlow({
           position: { x: startX + 450, y: startY },
           data: {
             label: shortLabel,
-            description: "",
+            description: summaryContent,
             type: "child",
             detailedContent: answerContent,
             isDetailExpanded: true,
@@ -2292,6 +2404,14 @@ export function useThinkFlow({
     searchResults,
     focusNode,
     showChatSidebar,
+    showNodeDetailPanel,
+    panelNodeData,
+    openNodeDetailPanel,
+    openGraphChat,
+    closeRightPanel,
+    togglePanelLock,
+    isDetailPanelLocked,
+    activeRightPanel,
     isChatting,
     graphChatMessages,
     addStickyNote,

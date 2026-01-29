@@ -1,37 +1,26 @@
 <script setup lang="ts">
 /**
  * 自定义节点：WindowNode
- * - 展示节点标题、描述、错误态、图片、深挖内容、followUp 输入
- * - 将用户交互（深挖/配图/继续扩展）转发给 useThinkFlow 的动作函数
+ * - 展示标题、摘要、图片与状态
  * - 使用 activePath 对非路径节点做弱化处理，突出当前上下文
  */
 
 // 组件状态
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref } from "vue";
 
 // VueFlow：连接点
 import { Handle, Position, useVueFlow } from "@vue-flow/core";
 
 // 图标：节点 UI
 import {
-  ArrowRight,
-  BookOpen,
   ChevronDown,
   ChevronRight,
   GripVertical,
-  Image as ImageIcon,
-  Lightbulb,
-  Maximize2,
   RefreshCw,
   Shield,
   Sparkles,
-  Terminal,
   Trash2,
-  X,
 } from "lucide-vue-next";
-
-// Markdown 渲染
-import MarkdownIt from "markdown-it";
 
 /**
  * props：
@@ -46,38 +35,16 @@ const props = defineProps<{
   selected: boolean;
   t: any;
   config: any;
-  fitView: (options?: any) => void;
   activeNodeId: string | null;
   activePath: { nodeIds: Set<string>; edgeIds: Set<string> };
   flowNodes: any[];
   updateNode: (id: string, payload: any) => void;
-  deepDive: (id: string, topic: string) => void;
   generateNodeImage: (id: string, prompt: string) => void;
   expandIdea: (param?: any, customInput?: string) => void;
   toggleSubtreeCollapse: (id: string) => void;
   isSubtreeCollapsed: (id: string) => boolean;
   deleteNode: (id: string) => void;
-  generateDerivedQuestions: (id: string) => void;
-  // 游客模式限制
-  isAuthenticated: boolean;
-  onShowAuthModal: () => void;
 }>();
-
-/**
- * 检查功能是否允许使用（非根节点需登录）
- */
-const checkAccess = () => {
-  if (props.isAuthenticated) return true;
-  if (props.data.type === "root") return true;
-  props.onShowAuthModal();
-  return false;
-};
-
-const md = new MarkdownIt({
-  html: true,
-  linkify: true,
-  typographer: true,
-});
 
 /**
  * preview：请求 App 打开图片预览弹窗
@@ -87,16 +54,11 @@ const emit = defineEmits<{
 }>();
 
 /**
- * followUp 输入框是否聚焦（用于边框高亮）
- */
-const isFocused = ref(false);
-
-/**
  * 节点宽度与拖拽逻辑
  */
-const MIN_WIDTH = 280;
-const MAX_WIDTH = 600;
-const nodeWidth = ref(props.data.nodeWidth || 340);
+const MIN_WIDTH = 220;
+const MAX_WIDTH = 400;
+const nodeWidth = ref(props.data.nodeWidth || 300);
 const isResizing = ref(false);
 
 const startResize = (e: MouseEvent) => {
@@ -129,115 +91,7 @@ const startResize = (e: MouseEvent) => {
   document.addEventListener("mouseup", onMouseUp);
 };
 
-/**
- * 文字选择相关状态
- */
-const selectedText = ref("");
-const showSelectionAction = ref(false);
-const selectionPosition = ref({ x: 0, y: 0, transformX: "-50%" });
 const { viewport } = useVueFlow();
-
-/**
-
- * 处理文字选择事件
- * 实现边界检测：水平限制不溢出容器，垂直方向如靠近顶部则翻转到选区下方
- */
-const handleTextSelection = (e: MouseEvent) => {
-  const selection = window.getSelection();
-  const text = selection?.toString().trim();
-
-  if (text && text.length > 0) {
-    selectedText.value = text;
-    showSelectionAction.value = true;
-
-    // 获取选区位置，相对于触发事件的容器
-    const range = selection?.getRangeAt(0);
-    const rect = range?.getBoundingClientRect();
-    const container = (e.currentTarget as HTMLElement)?.getBoundingClientRect();
-
-    if (rect && container) {
-      const zoom = viewport.value.zoom || 1;
-
-      // 按钮尺寸估算（实际宽度约100px，高度约30px）
-      // 所有屏幕像素计算需除以 zoom 以转回内部相对坐标
-      const buttonWidth = 100;
-      const buttonHeight = 30;
-      const gap = 12;
-      const containerWidth = container.width / zoom;
-
-      // 计算差值（屏幕像素）并转为内部CSS像素
-      const diffLeft = rect.left - container.left;
-      const diffTop = rect.top - container.top;
-
-      let x = (diffLeft + rect.width / 2) / zoom;
-      let y = diffTop / zoom - buttonHeight - gap;
-
-      // 水平边界限制
-      const halfButton = buttonWidth / 2;
-      if (x < halfButton) {
-        x = halfButton;
-      } else if (x > containerWidth - halfButton) {
-        x = containerWidth - halfButton;
-      }
-
-      // 垂直边界检测
-      if (y < 0) {
-        y = (diffTop + rect.height) / zoom + gap;
-      }
-
-      // 根据水平位置决定变换方式
-      let transformX = "-50%";
-      if (x <= halfButton) {
-        transformX = "0%";
-      } else if (x >= containerWidth - halfButton) {
-        transformX = "-100%";
-      }
-
-      selectionPosition.value = { x, y, transformX };
-    }
-  } else {
-    showSelectionAction.value = false;
-  }
-};
-
-/**
- * 监听全局点击或 selectionchange 以隐藏按钮
- */
-const checkSelection = () => {
-  const selection = window.getSelection();
-  if (!selection || selection.toString().trim().length === 0) {
-    showSelectionAction.value = false;
-  }
-};
-
-onMounted(() => {
-  document.addEventListener("selectionchange", checkSelection);
-});
-
-onUnmounted(() => {
-  document.removeEventListener("selectionchange", checkSelection);
-});
-
-/**
- * 直接基于选中文字进行扩展（Spawn）
- */
-const handleSpawn = () => {
-  // 游客模式限制：非根节点需登录
-  if (!checkAccess()) return;
-
-  // 直接调用 expandIdea，传入选中文字作为 customInput
-  props.expandIdea(
-    {
-      id: props.id,
-      data: props.data,
-      position: getNodePosition(props.id),
-    },
-    selectedText.value,
-  );
-
-  showSelectionAction.value = false;
-  window.getSelection()?.removeAllRanges();
-};
 
 /**
  * 从 flowNodes 中找到节点当前位置，用于扩展时定位新节点生成的参考坐标
@@ -246,49 +100,6 @@ const handleSpawn = () => {
 const getNodePosition = (id: string) =>
   props.flowNodes.find((n) => n.id === id)?.position;
 
-/**
- * 输入框聚焦处理：放大节点并居中视图
- */
-const handleFocus = () => {
-  isFocused.value = true;
-  // 聚焦时将视图中心对准该节点，并给予适当的 padding 确保放大后完整可见
-  props.fitView({ nodes: [props.id], padding: 1.5, duration: 600 });
-};
-
-/**
- * 输入框失去焦点处理
- */
-const handleBlur = () => {
-  isFocused.value = false;
-};
-
-/**
- * 调试：记录按钮点击时的状态
- */
-const handleExpandClick = () => {
-  console.log("[WindowNode Debug] 回答按钮点击:", {
-    nodeId: props.id,
-    followUp: props.data.followUp,
-    isExpanding: props.data.isExpanding,
-    dataSnapshot: JSON.stringify(props.data),
-    flowNodeData: props.flowNodes.find((n: any) => n.id === props.id)?.data,
-  });
-
-  if (!checkAccess()) {
-    console.log("[WindowNode Debug] checkAccess 返回 false");
-    return;
-  }
-
-  console.log("[WindowNode Debug] 调用 expandIdea...");
-  props.expandIdea(
-    {
-      id: props.id,
-      data: props.data,
-      position: getNodePosition(props.id),
-    },
-    props.data.followUp,
-  );
-};
 </script>
 
 <template>
@@ -298,24 +109,20 @@ const handleExpandClick = () => {
       'opacity-40 grayscale-[0.4] blur-[0.5px] scale-[0.98] pointer-events-none':
         props.activeNodeId && !props.activePath.nodeIds.has(props.id),
       'opacity-100 grayscale-0 blur-0 scale-105 z-50 ring-2 ring-offset-4':
-        props.activePath.nodeIds.has(props.id) && !isFocused,
-      'opacity-100 grayscale-0 blur-0 scale-110 z-[100] shadow-2xl ring-4 ring-offset-8':
-        isFocused,
+        props.activePath.nodeIds.has(props.id),
       resizing: isResizing,
     }"
     :style="{
-      width: props.data.isDetailExpanded ? '450px' : nodeWidth + 'px',
+      width: nodeWidth + 'px',
       borderColor:
-        isFocused || props.activePath.nodeIds.has(props.id)
+        props.activePath.nodeIds.has(props.id)
           ? props.config.edgeColor
           : props.config.edgeColor + '40',
-      boxShadow: isFocused
-        ? `0 25px 50px -12px ${props.config.edgeColor}60`
-        : props.activeNodeId === props.id
+      boxShadow: props.activeNodeId === props.id
           ? `0 20px 50px -12px ${props.config.edgeColor}40`
           : '',
       '--tw-ring-color':
-        isFocused || props.selected
+        props.selected
           ? props.config.edgeColor + '40'
           : 'transparent',
     }"
@@ -433,7 +240,7 @@ const handleExpandClick = () => {
     <div class="window-content">
       <div
         v-if="props.data.imageUrl || props.data.isImageLoading"
-        class="mb-4 rounded-lg overflow-hidden bg-slate-50 border border-slate-100 aspect-video flex items-center justify-center relative group/img cursor-pointer"
+        class="mb-3 rounded-lg overflow-hidden bg-slate-50 border border-slate-100 h-16 flex items-center justify-center relative cursor-pointer"
         @click.stop="
           props.data.imageUrl ? emit('preview', props.data.imageUrl) : null
         "
@@ -455,22 +262,6 @@ const handleExpandClick = () => {
             class="text-[8px] font-bold text-slate-400 uppercase tracking-widest animate-pulse"
             >{{ props.t("common.generating") }}</span
           >
-        </div>
-        <div
-          v-if="props.data.imageUrl"
-          class="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center gap-2"
-        >
-          <button
-            class="p-2 bg-white/20 hover:bg-white/40 rounded-full backdrop-blur-md transition-all"
-          >
-            <Maximize2 class="w-4 h-4 text-white" :stroke-width="1.5" />
-          </button>
-          <button
-            @click.stop="props.generateNodeImage(props.id, props.data.label)"
-            class="p-2 bg-white/20 hover:bg-white/40 rounded-full backdrop-blur-md transition-all"
-          >
-            <RefreshCw class="w-4 h-4 text-white" :stroke-width="1.5" />
-          </button>
         </div>
       </div>
 
@@ -497,7 +288,7 @@ const handleExpandClick = () => {
       </div>
 
       <p
-        class="text-[10px] text-slate-500 leading-relaxed font-medium line-clamp-3"
+        class="text-[10px] text-slate-500 leading-relaxed font-medium line-clamp-2"
       >
         {{ props.data.description }}
       </p>
@@ -557,202 +348,6 @@ const handleExpandClick = () => {
               }}</span
             >
           </div>
-
-          <div class="flex items-center gap-2">
-            <button
-              @click.stop="
-                checkAccess() && props.deepDive(props.id, props.data.label)
-              "
-              class="action-btn text-orange-500 hover:bg-orange-50"
-            >
-              <BookOpen class="w-2.5 h-2.5" :stroke-width="1.5" />
-              <span>{{ props.t("node.deepDive") }}</span>
-            </button>
-            <button
-              v-if="!props.data.imageUrl && !props.data.isImageLoading"
-              @click.stop="
-                checkAccess() &&
-                props.generateNodeImage(props.id, props.data.label)
-              "
-              class="action-btn text-blue-500 hover:bg-blue-50"
-            >
-              <ImageIcon class="w-2.5 h-2.5" :stroke-width="1.5" />
-              <span>{{ props.t("node.imgAction") }}</span>
-            </button>
-          </div>
-        </div>
-
-        <div
-          v-if="props.data.isDetailExpanded || props.data.detailedContent"
-          class="mb-4 pt-4 border-t border-slate-100 animate-in fade-in slide-in-from-top-2 duration-300"
-        >
-          <div class="flex items-center justify-between mb-2">
-            <span
-              class="text-[9px] font-black text-slate-400 uppercase tracking-widest"
-              >{{ props.t("node.deepDive") }}</span
-            >
-            <button
-              @click.stop="
-                props.updateNode(props.id, {
-                  data: { ...props.data, isDetailExpanded: false },
-                })
-              "
-              class="text-slate-300 hover:text-slate-500"
-            >
-              <X class="w-3 h-3" :stroke-width="1.5" />
-            </button>
-          </div>
-          <div
-            v-if="props.data.isDeepDiving"
-            class="flex flex-col items-center py-6"
-          >
-            <div class="relative mb-3">
-              <Sparkles
-                class="w-6 h-6 text-orange-400 animate-ai-glow"
-                :stroke-width="1.5"
-              />
-              <div
-                class="absolute inset-0 blur-lg bg-orange-200 opacity-50 animate-pulse"
-              ></div>
-            </div>
-            <span
-              class="text-[9px] font-black text-slate-400 uppercase tracking-widest animate-pulse"
-              >{{ props.t("common.loading") }}</span
-            >
-          </div>
-          <div v-else class="relative">
-            <div
-              class="markdown-body text-[11px] text-slate-600 leading-relaxed font-medium max-h-[350px] overflow-y-auto custom-scrollbar pr-2 selection:bg-orange-100 nowheel nodrag cursor-text select-text"
-              style="pointer-events: auto; user-select: text"
-              v-html="md.render(props.data.detailedContent)"
-              @mouseup="handleTextSelection"
-            ></div>
-
-            <!-- 浮动选择操作按钮 -->
-            <div
-              v-if="showSelectionAction"
-              class="absolute z-50 bg-slate-900 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg shadow-xl cursor-pointer hover:bg-slate-800 transition-all animate-in fade-in zoom-in-95 duration-200 whitespace-nowrap"
-              :style="{
-                left: selectionPosition.x + 'px',
-                top: selectionPosition.y + 'px',
-                transform: `translateX(${selectionPosition.transformX})`,
-              }"
-              @click.stop="handleSpawn"
-            >
-              <span class="flex items-center gap-1.5">
-                <Sparkles class="w-3 h-3 animate-ai-glow" :stroke-width="2" />
-                {{ props.t("node.spawn") }}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <!-- AI衍生问题气泡（在 detailedContent 生成后自动显示） -->
-        <div
-          v-if="
-            props.data.detailedContent &&
-            (props.data.derivedQuestions?.length ||
-              props.data.isGeneratingQuestions)
-          "
-          class="mb-3"
-        >
-          <div class="flex items-center mb-2">
-            <span
-              class="text-[9px] font-black text-slate-400 uppercase tracking-widest"
-              >{{ props.t("node.derivedQuestions") }}</span
-            >
-          </div>
-
-          <!-- 生成中状态 -->
-          <div
-            v-if="props.data.isGeneratingQuestions"
-            class="flex items-center gap-2 py-2"
-          >
-            <Sparkles
-              class="w-4 h-4 text-purple-400 animate-ai-glow"
-              :stroke-width="1.5"
-            />
-            <span class="text-[9px] font-bold text-slate-400 animate-pulse">{{
-              props.t("common.generating")
-            }}</span>
-          </div>
-
-          <!-- 衍生问题气泡 -->
-          <div
-            v-else-if="props.data.derivedQuestions?.length"
-            class="flex flex-wrap gap-1.5"
-          >
-            <button
-              v-for="(question, idx) in props.data.derivedQuestions"
-              :key="idx"
-              @click.stop="
-                props.updateNode(props.id, {
-                  data: { ...props.data, followUp: question },
-                })
-              "
-              class="px-2.5 py-1.5 text-[10px] font-bold rounded-full transition-all hover:scale-105 active:scale-95 border"
-            >
-              {{ question }}
-            </button>
-          </div>
-        </div>
-
-        <div class="relative group/input">
-          <div
-            class="flex items-center gap-2 bg-slate-50 rounded-lg px-2.5 py-2 border border-slate-100 focus-within:bg-white transition-all"
-            :style="{
-              borderColor:
-                props.data.followUp || isFocused ? props.config.edgeColor : '',
-            }"
-          >
-            <ChevronRight
-              v-if="!props.data.followUp"
-              class="w-3 h-3 text-slate-400"
-              :stroke-width="1.5"
-            />
-            <Terminal
-              v-else
-              class="w-3 h-3"
-              :style="{ color: props.config.edgeColor }"
-              :stroke-width="1.5"
-            />
-            <input
-              v-model="props.data.followUp"
-              @focus="handleFocus"
-              @blur="handleBlur"
-              @keyup.enter="
-                checkAccess() &&
-                props.expandIdea(
-                  {
-                    id: props.id,
-                    data: props.data,
-                    position: getNodePosition(props.id),
-                  },
-                  props.data.followUp,
-                )
-              "
-              :placeholder="props.t('node.followUp')"
-              class="bg-transparent border-none outline-none text-[10px] font-bold text-slate-700 flex-grow placeholder:text-slate-400"
-              :disabled="props.data.isExpanding"
-            />
-            <button
-              @click.stop="handleExpandClick"
-              :disabled="!props.data.followUp?.trim() || props.data.isExpanding"
-              class="transition-all transform active:scale-90"
-              :style="{
-                color: props.data.followUp?.trim()
-                  ? props.config.edgeColor
-                  : '#94a3b8',
-              }"
-            >
-              <Sparkles
-                v-if="props.data.isExpanding"
-                class="w-3.5 h-3.5 animate-ai-glow"
-                :stroke-width="1.5"
-              />
-              <ArrowRight v-else class="w-3.5 h-3.5" :stroke-width="1.5" />
-            </button>
-          </div>
         </div>
       </div>
     </div>
@@ -784,8 +379,8 @@ const handleExpandClick = () => {
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(0, 0, 0, 0.08);
-  min-width: 280px;
-  max-width: 600px;
+  min-width: 220px;
+  max-width: 400px;
   transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 

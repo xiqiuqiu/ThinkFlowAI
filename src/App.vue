@@ -33,6 +33,7 @@ import SideNav from "./components/SideNav.vue";
 import WindowNode from "./components/WindowNode.vue";
 import StickyNoteNode from "./components/StickyNoteNode.vue";
 import GraphChatSidebar from "./components/GraphChatSidebar.vue";
+import NodeDetailPanel from "./components/NodeDetailPanel.vue";
 import AuthModal from "./components/AuthModal.vue";
 import ProjectSelector from "./components/ProjectSelector.vue";
 
@@ -121,7 +122,6 @@ const {
   generateNodeImage,
   deepDive,
   expandIdea,
-  generateDerivedQuestions,
   aiStyle,
   isPresenting,
   togglePresentation: _togglePresentation,
@@ -131,6 +131,12 @@ const {
   searchResults,
   focusNode,
   showChatSidebar,
+  showNodeDetailPanel,
+  panelNodeData,
+  closeRightPanel,
+  togglePanelLock,
+  isDetailPanelLocked,
+  openGraphChat,
   isChatting,
   graphChatMessages,
   addStickyNote,
@@ -306,6 +312,31 @@ const verticalGuideStyle = computed(() => {
   return { left: `${screenX}px` };
 });
 
+const handlePanelFollowUp = (nodeId: string, question: string) => {
+  const node = flowNodes.value.find((n) => n.id === nodeId);
+  console.log("[App] panel follow-up", {
+    nodeId,
+    question,
+    foundNode: !!node,
+  });
+  if (!node) return;
+  expandIdea(
+    { id: nodeId, data: node.data, position: node.position },
+    question,
+  );
+};
+
+const handlePanelClickQuestion = (nodeId: string, question: string) => {
+  const node = flowNodes.value.find((n) => n.id === nodeId);
+  console.log("[App] panel clickQuestion", {
+    nodeId,
+    question,
+    foundNode: !!node,
+  });
+  if (!node) return;
+  updateNode(nodeId, { data: { ...node.data, followUp: question } });
+};
+
 const horizontalGuideStyle = computed(() => {
   const y = alignmentGuides.value.y;
   if (y == null) return null;
@@ -371,7 +402,9 @@ const fitToView = () => {
       :onResetLayout="resetLayout"
     />
 
-    <div class="flex-grow relative">
+    <div
+      class="flex-grow flex relative transition-all duration-300 gap-3 p-3 pt-0"
+    >
       <!-- 演示模式退出提示 -->
       <div
         v-if="isPresenting"
@@ -400,7 +433,7 @@ const fitToView = () => {
         :fit-view-on-init="false"
         :min-zoom="0.05"
         :max-zoom="4"
-        class="bg-white"
+        class="flex-grow bg-white rounded-xl border border-slate-200 overflow-hidden"
         :class="{
           'space-pressed': isSpacePressed,
           'presentation-mode': isPresenting,
@@ -440,20 +473,15 @@ const fitToView = () => {
             :selected="selected"
             :t="t"
             :config="config"
-            :fitView="fitView"
             :activeNodeId="activeNodeId"
             :activePath="activePath"
             :flowNodes="flowNodes"
             :updateNode="updateNode"
-            :deepDive="deepDive"
             :generateNodeImage="generateNodeImage"
             :expandIdea="expandIdea"
             :toggleSubtreeCollapse="toggleSubtreeCollapse"
             :isSubtreeCollapsed="isSubtreeCollapsed"
             :deleteNode="deleteNode"
-            :generateDerivedQuestions="generateDerivedQuestions"
-            :isAuthenticated="isAuthenticated"
-            :onShowAuthModal="() => (showAuthModal = true)"
             @preview="previewImageUrl = $event"
           />
         </template>
@@ -508,19 +536,39 @@ const fitToView = () => {
         :summaryContent="summaryContent"
         @close="showSummaryModal = false"
       />
-
-      <GraphChatSidebar
-        :show="showChatSidebar"
-        :t="t"
-        :isChatting="isChatting"
-        :messages="graphChatMessages"
-        :onSendMessage="sendGraphChatMessage"
-        :onClose="() => (showChatSidebar = false)"
-      />
-
-      <!-- 登录弹窗 -->
-      <AuthModal :show="showAuthModal" :t="t" @close="showAuthModal = false" />
     </div>
+
+    <!-- 右侧详情面板 -->
+    <NodeDetailPanel
+      v-if="showNodeDetailPanel"
+      :show="showNodeDetailPanel"
+      :nodeData="panelNodeData"
+      :locked="isDetailPanelLocked"
+      :t="t"
+      :isAuthenticated="isAuthenticated"
+      :onShowAuthModal="() => (showAuthModal = true)"
+      @close="closeRightPanel"
+      @toggleLock="togglePanelLock"
+      @followUp="handlePanelFollowUp"
+      @deepDive="(nodeId, topic) => deepDive(nodeId, topic)"
+      @generateImage="(nodeId, topic) => generateNodeImage(nodeId, topic)"
+      @preview="(url) => (previewImageUrl = url)"
+      @clickQuestion="handlePanelClickQuestion"
+    />
+
+    <!-- 右侧聊天面板 -->
+    <GraphChatSidebar
+      v-if="showChatSidebar"
+      :show="showChatSidebar"
+      :t="t"
+      :isChatting="isChatting"
+      :messages="graphChatMessages"
+      :onSendMessage="sendGraphChatMessage"
+      :onClose="closeRightPanel"
+    />
+
+    <!-- 登录弹窗 -->
+    <AuthModal :show="showAuthModal" :t="t" @close="showAuthModal = false" />
 
     <BottomBar
       v-if="!isPresenting"

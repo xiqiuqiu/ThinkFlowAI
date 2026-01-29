@@ -23,6 +23,7 @@ import "@vue-flow/controls/dist/style.css";
 
 // 页面 UI 子组件
 import BottomBar from "./components/BottomBar.vue";
+import BottomStatusBar from "./components/BottomStatusBar.vue";
 import ImagePreviewModal from "./components/ImagePreviewModal.vue";
 import ResetConfirmModal from "./components/ResetConfirmModal.vue";
 import SettingsModal from "./components/SettingsModal.vue";
@@ -337,24 +338,12 @@ const fitToView = () => {
       :t="t"
       :locale="locale"
       :config="config"
-      :onFit="fitToView"
-      :onResetLayout="resetLayout"
-      :onCenterRoot="centerRoot"
       :onStartNewSession="startNewSession"
       :onGenerateSummary="generateSummary"
       :onExportMarkdown="exportMarkdown"
       :onExportHTML="exportHTML"
-      :aiStyle="aiStyle"
-      :onToggleAiStyle="
-        () => (aiStyle = aiStyle === 'creative' ? 'precise' : 'creative')
-      "
       :isPresenting="isPresenting"
       :onTogglePresentation="togglePresentation"
-      :searchQuery="searchQuery"
-      :onUpdateSearchQuery="(val) => (searchQuery = val)"
-      :searchResults="searchResults"
-      :onFocusNode="focusNode"
-      :onToggleChat="() => (showChatSidebar = !showChatSidebar)"
       :isAuthenticated="isAuthenticated"
       :user="user"
       :onShowAuthModal="() => (showAuthModal = true)"
@@ -367,10 +356,19 @@ const fitToView = () => {
       :t="t"
       :locale="locale"
       :config="config"
-      :onFit="fitToView"
       :onResetLayout="resetLayout"
+      :searchQuery="searchQuery"
+      :onUpdateSearchQuery="(val) => (searchQuery = val)"
+      :searchResults="searchResults"
+      :onFocusNode="focusNode"
+    />
+
+    <BottomStatusBar
+      v-if="!isPresenting"
+      :t="t"
+      :config="config"
+      :onFit="fitToView"
       :onCenterRoot="centerRoot"
-      :onAddStickyNote="addStickyNote"
     />
 
     <div class="flex-grow relative">

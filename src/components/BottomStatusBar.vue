@@ -14,6 +14,7 @@ import {
   Palette,
   Waypoints,
   Grid,
+  LayoutDashboard,
 } from "lucide-vue-next";
 import { BackgroundVariant } from "@vue-flow/background";
 
@@ -22,6 +23,7 @@ const props = defineProps<{
   config: any;
   onFit: () => void;
   onCenterRoot: () => void;
+  onResetLayout: () => void;
 }>();
 
 // Menu States
@@ -83,7 +85,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="fixed bottom-4 left-4 z-40 flex items-center gap-2">
+  <div class="fixed right-6 bottom-4 z-40 flex items-center gap-2">
     <div class="glass rounded-xl shadow-glass p-1.5 flex items-center gap-1">
       <!-- 适配视图 -->
       <button
@@ -101,6 +103,15 @@ onUnmounted(() => {
         :title="props.t('nav.center')"
       >
         <Target class="w-4 h-4" />
+      </button>
+
+      <!-- 布局整理 -->
+      <button
+        @click="props.onResetLayout"
+        class="status-btn group text-purple-500 hover:bg-purple-50 border-purple-100"
+        :title="props.t('nav.layout')"
+      >
+        <LayoutDashboard class="w-4 h-4" />
       </button>
 
       <div class="w-px h-4 bg-slate-200 mx-0.5"></div>
@@ -132,10 +143,10 @@ onUnmounted(() => {
         >
           <Waypoints class="w-4 h-4" />
         </button>
-        <!-- Upward Menu -->
+        <!-- Upward Menu (Right Aligned) -->
         <div
           v-if="isEdgeTypeMenuOpen"
-          class="absolute left-0 bottom-full mb-2 min-w-[140px] bg-white border border-slate-200 rounded-lg shadow-xl p-1 z-50 overflow-hidden origin-bottom-left"
+          class="absolute right-0 bottom-full mb-2 min-w-[140px] bg-white border border-slate-200 rounded-lg shadow-xl p-1 z-50 overflow-hidden origin-bottom-right"
         >
           <button
             v-for="opt in edgeTypeOptions"
@@ -167,10 +178,10 @@ onUnmounted(() => {
         >
           <Grid class="w-4 h-4" />
         </button>
-        <!-- Upward Menu -->
+        <!-- Upward Menu (Right Aligned) -->
         <div
           v-if="isBackgroundMenuOpen"
-          class="absolute left-0 bottom-full mb-2 min-w-[120px] bg-white border border-slate-200 rounded-lg shadow-xl p-1 z-50 overflow-hidden origin-bottom-left"
+          class="absolute right-0 bottom-full mb-2 min-w-[120px] bg-white border border-slate-200 rounded-lg shadow-xl p-1 z-50 overflow-hidden origin-bottom-right"
         >
           <button
             v-for="opt in backgroundOptions"

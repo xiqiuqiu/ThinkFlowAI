@@ -344,17 +344,16 @@ const handleExpandClick = () => {
           : props.config.edgeColor + '05',
       }"
     >
-      <div class="flex gap-1.5">
+      <div class="flex gap-1.5 group/traffic px-1">
         <div
-          class="w-2 h-2 rounded-full"
-          :style="{
-            backgroundColor: props.activePath.nodeIds.has(props.id)
-              ? props.config.edgeColor
-              : props.config.edgeColor + '40',
-          }"
+          class="w-2.5 h-2.5 rounded-full bg-[#FF5F56] border border-[#E0443E] shadow-sm"
         ></div>
-        <div class="w-2 h-2 rounded-full bg-slate-200"></div>
-        <div class="w-2 h-2 rounded-full bg-slate-200"></div>
+        <div
+          class="w-2.5 h-2.5 rounded-full bg-[#FFBD2E] border border-[#DEA123] shadow-sm"
+        ></div>
+        <div
+          class="w-2.5 h-2.5 rounded-full bg-[#27C93F] border border-[#1AAB29] shadow-sm"
+        ></div>
       </div>
       <span
         class="window-title"
@@ -780,15 +779,19 @@ const handleExpandClick = () => {
 }
 
 .window-node {
-  @apply relative rounded-2xl overflow-hidden;
-  background: var(--bg-glass);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 2px solid var(--border-glass);
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.1);
+  @apply relative rounded-xl overflow-hidden shadow-terminal;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   min-width: 280px;
   max-width: 600px;
-  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.window-node:hover {
+  @apply shadow-2xl scale-[1.01] -translate-y-1;
+  border-color: rgba(0, 0, 0, 0.15);
 }
 
 .window-node.resizing {

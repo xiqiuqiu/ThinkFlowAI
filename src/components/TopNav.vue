@@ -109,7 +109,7 @@ const action = (fn: () => void) => {
       <div v-else class="relative">
         <button
           @click="toggleUserMenu"
-          class="flex items-center gap-2 bg-white/90 backdrop-blur-md rounded-full pl-1 pr-3 py-1 shadow-glass border border-white/50 hover:bg-white transition-all group"
+          class="flex items-center gap-2 bg-white/90 backdrop-blur-md rounded-full pl-1 pr-3 py-1 shadow-sm border border-slate-200/60 hover:bg-white hover:shadow-terminal transition-all duration-300 group"
         >
           <div
             class="w-8 h-8 rounded-full bg-gradient-to-br from-orange-400 to-rose-400 flex items-center justify-center text-white font-bold text-xs shadow-sm"
@@ -138,7 +138,7 @@ const action = (fn: () => void) => {
         >
           <div
             v-if="isUserMenuOpen"
-            class="absolute top-full right-0 mt-2 w-56 bg-white rounded-xl shadow-2xl border border-slate-100 overflow-hidden py-1 z-50 origin-top-right"
+            class="absolute top-full right-0 mt-2 w-56 bg-white/95 backdrop-blur-xl rounded-xl shadow-terminal border border-slate-200/60 overflow-hidden py-1 z-50 origin-top-right"
           >
             <!-- Header Info (Mobile only or extra info) -->
             <div class="px-4 py-3 border-b border-slate-50 sm:hidden">

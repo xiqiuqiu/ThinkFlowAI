@@ -36,27 +36,44 @@ export default {
         mono: ['JetBrains Mono', 'monospace'],
       },
       boxShadow: {
-        'glass': '0 25px 50px -12px rgba(0, 0, 0, 0.08)',
-        'glass-lg': '0 35px 60px -12px rgba(0, 0, 0, 0.12)',
-        'glow': '0 0 30px var(--color-primary)',
-        'glow-lg': '0 0 60px var(--color-primary)',
+        'glass': '0 8px 32px 0 rgba(31, 38, 135, 0.07)',
+        'glass-lg': '0 8px 32px 0 rgba(31, 38, 135, 0.15)',
+        'glow': '0 0 20px var(--color-primary)',
+        'glow-lg': '0 0 40px var(--color-primary)',
+        'terminal': '0 10px 30px -10px rgba(0, 0, 0, 0.2)',
       },
       backdropBlur: {
+        'xs': '2px',
         '2xl': '40px',
         '3xl': '64px',
       },
       animation: {
-        'glow': 'glow 2.5s ease-in-out infinite',
+        'glow': 'glow 3s ease-in-out infinite',
         'float': 'float 6s ease-in-out infinite',
+        'fade-in': 'fadeIn 0.5s ease-out forwards',
+        'item-in': 'itemIn 0.4s ease-out forwards',
+        'scale-in': 'scaleIn 0.2s ease-out forwards',
       },
       keyframes: {
         glow: {
           '0%, 100%': { filter: 'drop-shadow(0 0 5px currentColor)', transform: 'scale(1)' },
-          '50%': { filter: 'drop-shadow(0 0 20px currentColor)', transform: 'scale(1.05)' },
+          '50%': { filter: 'drop-shadow(0 0 20px currentColor)', transform: 'scale(1.02)' },
         },
         float: {
           '0%, 100%': { transform: 'translateY(0)' },
           '50%': { transform: 'translateY(-10px)' },
+        },
+        fadeIn: {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
+        itemIn: {
+          '0%': { opacity: '0', transform: 'translateY(10px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        scaleIn: {
+          '0%': { opacity: '0', transform: 'scale(0.95)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
         },
       },
     },

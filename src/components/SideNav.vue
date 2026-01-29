@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from "vue";
-import { LayoutDashboard, Search, X } from "lucide-vue-next";
+import { Search, X } from "lucide-vue-next";
 
 const props = defineProps<{
   t: any;
   locale: string;
   config: any;
-  onResetLayout: () => void;
+
   // Search Props
   searchQuery: string;
   onUpdateSearchQuery: (val: string) => void;
@@ -37,7 +37,7 @@ const toggleSearch = () => {
     class="fixed left-4 top-1/2 -translate-y-1/2 z-30 hidden md:flex flex-col gap-3"
   >
     <div
-      class="glass rounded-2xl shadow-glass p-2 flex flex-col gap-2 relative"
+      class="glass rounded-xl shadow-terminal p-2 flex flex-col gap-2 relative bg-white/90 backdrop-blur-xl border border-slate-200/60"
     >
       <!-- 搜索按钮 (带浮动输入框) -->
       <div class="relative">
@@ -119,19 +119,6 @@ const toggleSearch = () => {
           </div>
         </Transition>
       </div>
-
-      <div class="h-px bg-slate-100 mx-2 my-1"></div>
-
-      <!-- 布局 -->
-      <button
-        @click="props.onResetLayout"
-        class="side-btn group text-purple-500 hover:bg-purple-50 border-purple-100"
-      >
-        <LayoutDashboard class="w-5 h-5" />
-        <span class="custom-tooltip custom-tooltip-right">{{
-          props.t("nav.layout")
-        }}</span>
-      </button>
     </div>
   </div>
 </template>

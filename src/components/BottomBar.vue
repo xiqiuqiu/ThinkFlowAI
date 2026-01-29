@@ -109,29 +109,30 @@ const handleBallClick = () => {
     >
       <div
         :class="[
-          'flex items-center bg-slate-50/80 backdrop-blur-xl border-slate-200/60',
+          'flex items-center bg-white/90 backdrop-blur-xl border-slate-200/60',
           'transform-gpu will-change-transform overflow-hidden',
           isExpanded
-            ? 'opacity-100 w-full py-2 md:py-3 px-3 md:px-5 gap-2 md:gap-3 rounded-xl md:rounded-2xl border translate-y-0 shadow-2xl shadow-slate-200/50'
+            ? 'opacity-100 w-full py-2 md:py-3 px-3 md:px-5 gap-2 md:gap-3 rounded-xl border translate-y-0 shadow-terminal'
             : 'opacity-0 w-12 h-12 md:w-14 md:h-14 p-0 gap-0 rounded-full border-0 translate-y-2 pointer-events-none',
         ]"
         :style="{
           transition: 'all 600ms cubic-bezier(0.34, 1.56, 0.64, 1)',
         }"
       >
-        <Terminal
-          class="flex-shrink-0 transition-all duration-500"
+        <span
+          class="font-mono text-orange-500 font-bold text-lg select-none transition-all duration-500"
           :class="
             isExpanded
-              ? 'w-4 h-4 md:w-5 h-5 text-slate-400 opacity-100'
-              : 'w-0 h-0 opacity-0'
+              ? 'opacity-100 translate-x-0'
+              : 'opacity-0 -translate-x-4'
           "
-        />
+          >></span
+        >
         <input
           ref="inputRef"
           :value="props.modelValue"
           :placeholder="props.t('nav.placeholder')"
-          class="flex-grow bg-transparent border-none outline-none text-xs md:text-sm font-bold text-slate-700 placeholder:text-slate-400 min-w-0 transition-opacity duration-300 delay-100"
+          class="flex-grow bg-transparent border-none outline-none text-xs md:text-sm font-mono font-medium text-slate-700 placeholder:text-slate-400 min-w-0 transition-opacity duration-300 delay-100"
           :class="isExpanded ? 'opacity-100' : 'opacity-0'"
           @input="
             emit('update:modelValue', ($event.target as HTMLInputElement).value)

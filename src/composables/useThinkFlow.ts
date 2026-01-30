@@ -501,7 +501,7 @@ export function useThinkFlow({
    * 删除指定节点及其所有后代节点
    * 用于用户手动删除子节点
    */
-  const deleteNode = (nodeId: string) => {
+  const deleteNode = async (nodeId: string) => {
     // 不允许删除根节点
     const node = flowNodes.value.find((n) => n.id === nodeId);
     if (!node || node.data.type === "root" || node.id.startsWith("root"))
@@ -518,6 +518,9 @@ export function useThinkFlow({
         activeRightPanel.value = "none";
       }
     }
+
+    // 关键：立即保存到云端（删除操作）
+    await immediateCloudSave();
   };
 
   /**
@@ -617,6 +620,22 @@ export function useThinkFlow({
   };
 
   /**
+   * 立即触发云端同步（跳过防抖）
+   * 用于关键操作（如生图、回答）完成后立即保存，防止刷新丢失
+   */
+  const immediateCloudSave = async () => {
+    if (cloudSyncEnabled.value && saveToCloudFn) {
+      try {
+        console.log("[CloudSync] 立即同步数据到云端...");
+        await saveToCloudFn(toRaw(flowNodes.value), toRaw(flowEdges.value));
+        console.log("[CloudSync] 立即同步完成");
+      } catch (error) {
+        console.error("[CloudSync] 立即同步失败:", error);
+      }
+    }
+  };
+
+  /**
    * 画布状态持久化 (Nodes, Edges, Collapsed)
    * - 按项目隔离保存到 localStorage
    * - 如启用云存储，同时防抖同步到云端
@@ -700,7 +719,18 @@ export function useThinkFlow({
           await nextTick();
 
           // 恢复节点和边
-          setNodes(nodes);
+          // 修复：重置所有临时状态，防止刷新后停留在“生成中”
+          const sanitizedNodes = nodes.map((n: any) => ({
+            ...n,
+            data: {
+              ...n.data,
+              isImageLoading: false,
+              isExpanding: false,
+              isDeepDiving: false,
+              isGeneratingQuestions: false,
+            },
+          }));
+          setNodes(sanitizedNodes);
           setEdges(edges);
           collapsedNodeIds.value = collapsed;
 
@@ -813,43 +843,23 @@ export function useThinkFlow({
     currentProjectId.value = projectId;
     localStorage.setItem("thinkflow_current_project_id", projectId);
 
-    // 先尝试从 localStorage 加载（快速响应）
-    const localNodes = localStorage.getItem(`thinkflow_${projectId}_nodes`);
-    const localEdges = localStorage.getItem(`thinkflow_${projectId}_edges`);
-    const localCollapsed = localStorage.getItem(
-      `thinkflow_${projectId}_collapsed`,
-    );
-
-    if (localNodes && localEdges) {
-      try {
-        const nodes = JSON.parse(localNodes);
-        const edges = JSON.parse(localEdges);
-        const collapsed = localCollapsed ? JSON.parse(localCollapsed) : [];
-
-        if (nodes.length > 0) {
-          await clearCanvas();
-          setNodes(nodes);
-          setEdges(edges);
-          collapsedNodeIds.value = collapsed;
-          showIdeaInput.value = false; // 有数据则收起输入框
-          console.log(`[ThinkFlow] 从本地缓存加载 ${nodes.length} 个节点`);
-
-          setTimeout(() => {
-            fitView({ padding: 0.2, duration: 500 });
-          }, 100);
-          return;
-        }
-      } catch (e) {
-        console.error("[ThinkFlow] 解析本地缓存失败:", e);
-      }
-    }
-
-    // 本地无缓存，从云端加载
+    // 云端优先策略：直接从云端加载，避免 localStorage 缓存满时的问题
     const cloudData = await loadFromCloudFn(projectId);
 
     if (cloudData && cloudData.nodes.length > 0) {
       await clearCanvas();
-      setNodes(cloudData.nodes);
+      // 修复：重置所有临时状态
+      const sanitizedNodes = cloudData.nodes.map((n: any) => ({
+        ...n,
+        data: {
+          ...n.data,
+          isImageLoading: false,
+          isExpanding: false,
+          isDeepDiving: false,
+          isGeneratingQuestions: false,
+        },
+      }));
+      setNodes(sanitizedNodes);
       setEdges(cloudData.edges);
       collapsedNodeIds.value = [];
       showIdeaInput.value = false; // 有数据则收起输入框
@@ -1721,6 +1731,9 @@ export function useThinkFlow({
       updateNode(nodeId, {
         data: { ...node.data, imageUrl, isImageLoading: false, error: null },
       });
+
+      // 关键：立即保存到云端
+      await immediateCloudSave();
     } catch (error: any) {
       console.error("Image Generation Error:", error);
       updateNode(nodeId, {
@@ -1825,6 +1838,9 @@ export function useThinkFlow({
 
       // 自动生成衍生问题
       generateDerivedQuestions(nodeId, content);
+
+      // 关键：立即保存到云端（深挖内容）
+      await immediateCloudSave();
     } catch (error: any) {
       console.error("Deep Dive Error:", error);
       updateNode(nodeId, {
@@ -2039,6 +2055,9 @@ export function useThinkFlow({
         // 生成子节点
         processSubNodes(result.nodes, rootId, startX, startY);
 
+        // 关键：立即保存到云端（根节点生成）
+        await immediateCloudSave();
+
         setTimeout(() => {
           resetLayout(); // 强制重排，确保对齐
           const childEdges = flowEdges.value.filter((e) => e.source === rootId);
@@ -2210,6 +2229,9 @@ export function useThinkFlow({
 
         // 自动生成衍生问题
         generateDerivedQuestions(childId, answerContent);
+
+        // 关键：立即保存到云端（追问节点生成）
+        await immediateCloudSave();
       } catch (error: any) {
         console.error("Follow-up Error:", error);
         const nodeObj = flowNodes.value.find((n) => n.id === parentNode.id);
@@ -2306,6 +2328,9 @@ export function useThinkFlow({
           isGeneratingQuestions: false,
         },
       });
+
+      // 关键：立即保存到云端（衍生问题）
+      await immediateCloudSave();
     } catch (error: any) {
       console.error("Generate Derived Questions Error:", error);
       updateNode(nodeId, {

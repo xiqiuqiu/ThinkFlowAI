@@ -388,7 +388,7 @@ const fitToView = () => {
       <!-- 画布容器 (包含悬浮控件) -->
       <div class="flex-grow relative w-full h-full min-h-0 overflow-hidden">
         <SideNav
-          v-if="!isPresenting"
+          v-if="false"
           :t="t"
           :locale="locale"
           :config="config"

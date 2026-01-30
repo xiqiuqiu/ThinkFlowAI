@@ -151,14 +151,6 @@ const getNodePosition = (id: string) =>
     >
       <!-- 极简状态指示 -->
       <div class="flex items-center gap-2">
-        <div
-          class="w-2 h-2 rounded-full"
-          :style="{
-            backgroundColor: props.data.isExpanding
-              ? props.config.edgeColor
-              : '#a8a29e',
-          }"
-        ></div>
         <span
           class="window-title"
           :style="{
@@ -168,7 +160,7 @@ const getNodePosition = (id: string) =>
           }"
         >
           {{
-            props.data.type === "root"
+            props.data.type === "root" || props.id.startsWith("root")
               ? props.t("node.mainTitle")
               : props.t("node.moduleTitle")
           }}
@@ -203,7 +195,7 @@ const getNodePosition = (id: string) =>
           >
         </button>
         <button
-          v-if="props.data.type !== 'root'"
+          v-if="props.data.type !== 'root' && !props.id.startsWith('root')"
           type="button"
           class="flex items-center gap-1 px-1.5 py-1 rounded-md text-[9px] font-black tracking-widest uppercase transition-colors text-rose-400 hover:bg-rose-50 hover:text-rose-600"
           :title="props.t('node.delete')"

@@ -504,7 +504,8 @@ export function useThinkFlow({
   const deleteNode = (nodeId: string) => {
     // 不允许删除根节点
     const node = flowNodes.value.find((n) => n.id === nodeId);
-    if (!node || node.data.type === "root") return;
+    if (!node || node.data.type === "root" || node.id.startsWith("root"))
+      return;
 
     // 先删除所有后代节点
     removeDescendants(nodeId);
@@ -767,7 +768,7 @@ export function useThinkFlow({
         childrenCount: 0,
         isExpanding: false,
         followUp: "",
-        type: "window",
+        type: "root",
       },
     };
     setNodes([rootNode]);

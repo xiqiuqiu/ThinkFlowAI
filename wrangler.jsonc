@@ -16,5 +16,12 @@
     "VITE_IMAGE_BASE_URL": "",
     "VITE_IMAGE_MODEL": "",
     "VITE_IMAGE_API_KEY": ""
+  },
+  
+  "observability": {
+    "logs": {
+      "enabled": false,
+      "invocation_logs": true
+    }
   }
 }

@@ -37,10 +37,10 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/xiqiuqiu/ThinkFlowAI.git
+git clone https://github.com/xiqiuqiu/OmniMind.git
 
 # Enter the directory
-cd ThinkFlowAI
+cd OmniMind
 
 # Install dependencies
 npm install

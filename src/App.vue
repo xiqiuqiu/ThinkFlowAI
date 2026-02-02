@@ -37,6 +37,7 @@ import NodeDetailPanel from "./components/NodeDetailPanel.vue";
 import AuthModal from "./components/AuthModal.vue";
 import ProjectSelector from "./components/ProjectSelector.vue";
 import ContextMenu from "./components/ContextMenu.vue";
+import LoadingSpinner from "./components/LoadingSpinner.vue";
 
 // 认证状态
 import { useAuth } from "./composables/useAuth";
@@ -54,7 +55,14 @@ import { computed, ref, onMounted, onUnmounted, watch } from "vue";
 const { t, locale } = useI18n();
 
 // 认证状态
-const { isAuthenticated, initAuth, signOut, user } = useAuth();
+const {
+  isAuthenticated,
+  initAuth,
+  signOut,
+  user,
+  loading: authLoading,
+  initialized: authInitialized,
+} = useAuth();
 const showAuthModal = ref(false);
 
 /**
@@ -161,11 +169,28 @@ const {
   detectChanges,
   loadFromCloud,
   resetSyncState,
+  isSyncing,
 } = useCloudStorage();
 
 // 获取当前项目
 const { currentProject, resetProject, createProject, selectProject } =
   useProjects();
+
+// 初始项目加载状态（首次加载项目数据时为 true）
+const isInitialProjectLoading = ref(false);
+
+// 应用就绪状态：
+// - 认证初始化完成
+// - 无初始项目加载中
+// - 无云端同步中
+// - 对已登录用户：需有当前项目（避免认证完成到项目加载之间的闪现）
+const isAppReady = computed(() => {
+  if (!authInitialized.value) return false;
+  if (isInitialProjectLoading.value || isSyncing.value) return false;
+  // 已登录用户需等待项目就绪
+  if (isAuthenticated.value && !currentProject.value) return false;
+  return true;
+});
 
 // 监听登录状态，启用云端同步
 watch(
@@ -224,6 +249,8 @@ watch(
       }
     } else if (authenticated) {
       // 已登录（页面刷新等情况）
+      // 立即设置加载状态，防止输入框闪现
+      isInitialProjectLoading.value = true;
       initCloudSync(async (nodes: any[], edges: any[]) => {
         detectChanges(nodes, edges);
         await Promise.all([
@@ -239,6 +266,7 @@ watch(
       resetSyncState();
       showIdeaInput.value = true;
     }
+    // 游客模式无需特殊处理，authLoading 由 useAuth 内部管理
   },
   { immediate: true },
 );
@@ -246,12 +274,18 @@ watch(
 // 监听项目切换，加载对应项目数据
 watch(
   () => currentProject.value,
-  async (project) => {
+  async (project, oldProject) => {
     if (project && isAuthenticated.value) {
+      // 首次加载（从无项目到有项目）设置初始加载状态
+      if (!oldProject) {
+        isInitialProjectLoading.value = true;
+      }
       // 重置同步状态
       resetSyncState();
       // 加载项目数据
       await loadProjectData(project.id, loadFromCloud);
+      // 加载完成
+      isInitialProjectLoading.value = false;
     }
   },
 );
@@ -469,6 +503,21 @@ const handleDeleteFromMenu = (id: string) => {
           </button>
         </div>
 
+        <!-- 项目切换加载动画 -->
+        <Transition name="fade">
+          <div
+            v-if="!isAppReady"
+            class="absolute inset-0 z-50 flex items-center justify-center bg-white/60 backdrop-blur-md transition-all duration-300"
+          >
+            <div class="flex flex-col items-center gap-6 p-8 rounded-2xl">
+              <LoadingSpinner size="lg" color="bg-slate-600" />
+              <!-- <span class="text-xs text-slate-500 font-medium tracking-widest uppercase opacity-80 animate-pulse">{{
+                t("common.loading") || "LOADING"
+              }}</span> -->
+            </div>
+          </div>
+        </Transition>
+
         <VueFlow
           :default-edge-options="{ type: config.edgeType }"
           :fit-view-on-init="false"
@@ -595,7 +644,7 @@ const handleDeleteFromMenu = (id: string) => {
         />
 
         <BottomBar
-          v-if="!isPresenting"
+          v-if="!isPresenting && isAppReady"
           :t="t"
           :isLoading="isLoading"
           v-model="ideaInput"
@@ -604,6 +653,7 @@ const handleDeleteFromMenu = (id: string) => {
             () => (aiStyle = aiStyle === 'creative' ? 'precise' : 'creative')
           "
           :forceExpanded="showIdeaInput"
+          :hasNodes="flowNodes.length > 0"
           @expand="expandIdea"
         />
       </div>
@@ -844,5 +894,16 @@ input:focus::placeholder {
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* Fade transition for loading overlay */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>

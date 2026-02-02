@@ -99,6 +99,7 @@ export function useAuth() {
     user,
     userId,
     loading,
+    initialized,
     isAuthenticated,
     signInWithEmail,
     signUpWithEmail,

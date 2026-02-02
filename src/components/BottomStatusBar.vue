@@ -85,7 +85,9 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="absolute right-6 bottom-4 z-30 flex items-center gap-2">
+  <div
+    class="absolute z-30 flex items-center gap-2 bottom-4 left-1/2 -translate-x-1/2 md:left-auto md:right-6 md:translate-x-0 transition-all duration-300 w-max max-w-[90vw] overflow-x-auto no-scrollbar"
+  >
     <div class="glass rounded-xl shadow-glass p-1.5 flex items-center gap-1">
       <!-- 适配视图 -->
       <button

@@ -16,6 +16,37 @@ import type {
   Database,
 } from "@/lib/database.types";
 
+// Helper: Generate consistent hash for node change detection
+// Only includes fields that are persisted to DB
+const getNodeHash = (node: any) => {
+  return JSON.stringify({
+    id: node.id,
+    type: node.type,
+    position: node.position,
+    data: {
+      label: node.data?.label || "",
+      title: node.data?.title || "",
+      description: node.data?.description || "",
+      detailedContent: node.data?.detailedContent || "",
+      imageUrl: node.data?.imageUrl || "",
+      childrenCount: node.data?.childrenCount || 0,
+      isExpanding: node.data?.isExpanding || false,
+      followUp: node.data?.followUp || "",
+    },
+  });
+};
+
+// Helper: Generate consistent hash for edge change detection
+const getEdgeHash = (edge: any) => {
+  return JSON.stringify({
+    id: edge.id,
+    source: edge.source,
+    target: edge.target,
+    type: edge.type,
+    style: edge.style || {},
+  });
+};
+
 // Insert 类型别名
 type NodeInsert = Database["public"]["Tables"]["nodes"]["Insert"];
 type EdgeInsert = Database["public"]["Tables"]["edges"]["Insert"];
@@ -77,10 +108,7 @@ export function useCloudStorage() {
     const currentNodeIds = new Set<string>();
     for (const node of currentNodes) {
       currentNodeIds.add(node.id);
-      const nodeHash = JSON.stringify({
-        position: node.position,
-        data: node.data,
-      });
+      const nodeHash = getNodeHash(node);
       if (lastSyncedNodes.get(node.id) !== nodeHash) {
         dirtyNodes.value.add(node.id);
       }
@@ -96,11 +124,7 @@ export function useCloudStorage() {
     const currentEdgeIds = new Set<string>();
     for (const edge of currentEdges) {
       currentEdgeIds.add(edge.id);
-      const edgeHash = JSON.stringify({
-        source: edge.source,
-        target: edge.target,
-        type: edge.type,
-      });
+      const edgeHash = getEdgeHash(edge);
       if (lastSyncedEdges.get(edge.id) !== edgeHash) {
         dirtyEdges.value.add(edge.id);
       }
@@ -157,13 +181,7 @@ export function useCloudStorage() {
 
       // 更新快照
       for (const node of nodesToSave) {
-        lastSyncedNodes.set(
-          node.id,
-          JSON.stringify({
-            position: node.position,
-            data: node.data,
-          }),
-        );
+        lastSyncedNodes.set(node.id, getNodeHash(node));
       }
 
       // 清除已同步的脏标记
@@ -213,14 +231,7 @@ export function useCloudStorage() {
 
       // 更新快照
       for (const edge of edgesToSave) {
-        lastSyncedEdges.set(
-          edge.id,
-          JSON.stringify({
-            source: edge.source,
-            target: edge.target,
-            type: edge.type,
-          }),
-        );
+        lastSyncedEdges.set(edge.id, getEdgeHash(edge));
       }
 
       dirtyEdges.value.clear();
@@ -322,13 +333,7 @@ export function useCloudStorage() {
           },
         };
         // 初始化快照
-        lastSyncedNodes.set(
-          node.id,
-          JSON.stringify({
-            position: node.position,
-            data: node.data,
-          }),
-        );
+        lastSyncedNodes.set(node.id, getNodeHash(node));
         return node;
       });
 
@@ -341,14 +346,7 @@ export function useCloudStorage() {
           type: e.type,
           style: e.style,
         };
-        lastSyncedEdges.set(
-          edge.id,
-          JSON.stringify({
-            source: edge.source,
-            target: edge.target,
-            type: edge.type,
-          }),
-        );
+        lastSyncedEdges.set(edge.id, getEdgeHash(edge));
         return edge;
       });
 

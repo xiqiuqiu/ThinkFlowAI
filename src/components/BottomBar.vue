@@ -7,14 +7,7 @@
 
 import { ref, computed } from "vue";
 // 图标：输入提示与执行态
-import {
-  Github,
-  RefreshCw,
-  Terminal,
-  Zap,
-  Sparkles,
-  Brain,
-} from "lucide-vue-next";
+import { Sparkles, Brain, Zap, RefreshCw, Terminal } from "lucide-vue-next";
 
 /**
  * props：
@@ -24,6 +17,7 @@ import {
  * - aiStyle: AI 思考风格
  * - onToggleAiStyle: 切换 AI 思考风格的回调
  * - forceExpanded: 强制展开输入框（新项目时使用）
+ * - hasNodes: 是否已有节点（决定输入框位置）
  */
 const props = defineProps<{
   t: any;
@@ -32,6 +26,7 @@ const props = defineProps<{
   aiStyle: string;
   onToggleAiStyle: () => void;
   forceExpanded?: boolean;
+  hasNodes?: boolean;
 }>();
 
 /**
@@ -46,7 +41,6 @@ const emit = defineEmits<{
 
 // 输入框状态管理
 const isInputFocused = ref(false);
-const isHovering = ref(false);
 const inputRef = ref<HTMLInputElement>();
 
 // 计算输入框是否应该展开
@@ -54,8 +48,8 @@ const isExpanded = computed(
   () =>
     props.forceExpanded ||
     isInputFocused.value ||
-    isHovering.value ||
-    props.modelValue.trim().length > 0,
+    props.modelValue.trim().length > 0 ||
+    !props.hasNodes, // 新项目（无节点）时始终展开
 );
 
 // 处理输入框焦点
@@ -81,15 +75,6 @@ const handleStyleToggle = (e: MouseEvent) => {
   }
 };
 
-// 处理容器悬停
-const handleContainerMouseEnter = () => {
-  isHovering.value = true;
-};
-
-const handleContainerMouseLeave = () => {
-  isHovering.value = false;
-};
-
 // 点击圆形球时聚焦输入框
 const handleBallClick = () => {
   if (inputRef.value) {
@@ -100,13 +85,14 @@ const handleBallClick = () => {
 
 <template>
   <div
-    class="absolute bottom-4 md:bottom-4 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-3 w-full max-w-2xl px-4 md:px-6"
+    class="absolute z-30 flex flex-col items-center gap-3 w-full px-4 md:px-6 transition-all duration-700 ease-in-out"
+    :class="[
+      props.hasNodes
+        ? 'bottom-20 md:bottom-4 max-w-[92vw] md:max-w-2xl left-1/2 -translate-x-1/2'
+        : 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 max-w-lg md:max-w-2xl',
+    ]"
   >
-    <div
-      class="flex items-center justify-center w-full relative"
-      @mouseenter="handleContainerMouseEnter"
-      @mouseleave="handleContainerMouseLeave"
-    >
+    <div class="flex items-center justify-center w-full relative">
       <div
         :class="[
           'flex items-center bg-white/90 backdrop-blur-xl border-slate-200/60',
@@ -132,7 +118,7 @@ const handleBallClick = () => {
           ref="inputRef"
           :value="props.modelValue"
           :placeholder="props.t('nav.placeholder')"
-          class="flex-grow bg-transparent border-none outline-none text-xs md:text-sm font-mono font-medium text-slate-700 placeholder:text-slate-400 min-w-0 transition-opacity duration-300 delay-100"
+          class="flex-grow bg-transparent border-none outline-none text-base md:text-sm font-mono font-medium text-slate-700 placeholder:text-slate-400 min-w-0 transition-opacity duration-300 delay-100"
           :class="isExpanded ? 'opacity-100' : 'opacity-0'"
           @input="
             emit('update:modelValue', ($event.target as HTMLInputElement).value)
@@ -210,7 +196,7 @@ const handleBallClick = () => {
               'group-hover:text-orange-500 group-hover:scale-110',
             ]"
           />
-          <!-- 悬停时的光晕效果 -->
+          <!-- 悬停时的光晕效果 (仅修饰) -->
           <div
             class="absolute inset-0 w-5 h-5 md:w-6 md:h-6 bg-orange-400/20 rounded-full blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300"
           ></div>
@@ -220,6 +206,14 @@ const handleBallClick = () => {
         <div
           class="absolute inset-0 rounded-full bg-gradient-to-br from-orange-200/30 to-slate-200/30 animate-pulse opacity-0 group-hover:opacity-100 transition-opacity duration-500"
         ></div>
+
+        <!-- 新项目提示 (当在中心点时) -->
+        <div
+          v-if="!props.hasNodes"
+          class="absolute -bottom-8 whitespace-nowrap text-xs text-slate-400/80 font-mono tracking-widest uppercase animate-pulse"
+        >
+          {{ props.t("nav.clickToStart") || "Click to Start" }}
+        </div>
       </div>
     </div>
 

@@ -1,10 +1,10 @@
-# ThinkFlowAI Agent Guide
+# OmniMind Agent Guide
 
 This document is for agentic coding assistants working in this repository.
 
 ## Project Overview
 
-ThinkFlowAI (OmniMind) is a Vue 3 + TypeScript app for AI-powered mind mapping. It uses Vue Flow for the canvas, Tailwind CSS for styling, and optional Supabase sync.
+OmniMind (OmniMind) is a Vue 3 + TypeScript app for AI-powered mind mapping. It uses Vue Flow for the canvas, Tailwind CSS for styling, and optional Supabase sync.
 
 ## Source of Truth
 
@@ -38,6 +38,7 @@ npm run test:ui
 ```
 
 Testing and linting:
+
 - No lint script configured.
 - Test framework: Vitest + @vue/test-utils + jsdom.
 - Single-test command:
@@ -59,32 +60,36 @@ src/
 ## Code Style Guidelines
 
 ### Vue + TypeScript
+
 - Use `<script setup lang="ts">` for components.
 - TypeScript `strict` is enabled; always type props, refs, emits, and function params.
 - Prefer Composition API: `ref`, `reactive`, `computed`, `watch`.
 - Use `defineProps`/`defineEmits` with explicit types.
 
 ### Import Order
+
 ```ts
 // 1) Vue core
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted } from "vue";
 
 // 2) Third-party
-import { useVueFlow } from '@vue-flow/core'
-import { createClient } from '@supabase/supabase-js'
+import { useVueFlow } from "@vue-flow/core";
+import { createClient } from "@supabase/supabase-js";
 
 // 3) Internal (use @ alias)
-import { DEFAULT_CONFIG } from '@/services/config'
-import { useAuth } from '@/composables/useAuth'
+import { DEFAULT_CONFIG } from "@/services/config";
+import { useAuth } from "@/composables/useAuth";
 ```
 
 ### Naming
+
 - Components: PascalCase (WindowNode.vue)
 - Composables: `useXxx` camelCase (useThinkFlow.ts)
 - Functions/vars: camelCase (expandIdea, activeNodeId)
 - Constants: UPPER_SNAKE_CASE
 
 ### Component Structure
+
 ```vue
 <script setup lang="ts">
 // 1. Imports
@@ -104,27 +109,32 @@ import { useAuth } from '@/composables/useAuth'
 ```
 
 ### Error Handling
+
 - Wrap async calls with try/catch.
 - Log with context: `console.error('[Feature] message:', error)`.
 - Surface user-friendly errors for critical failures.
 
 ### State Management
+
 - Keep UI state local when possible.
 - Centralize business logic in composables.
 - Use `computed` for derived values.
 
 ### Styling
+
 - Tailwind first; scoped CSS only for complex animations or Vue Flow overrides.
 - Keep color scheme consistent (slate + orange accent).
 - Maintain responsive layout patterns.
 
 ### API and Data
+
 - Use Axios for HTTP requests.
 - Store credentials in `.env` with `VITE_` prefix or via UI settings; never hardcode secrets.
 - Text generation uses OpenAI-compatible Chat Completions.
 - Image generation uses OpenRouter-compatible responses; changing providers requires updating parsing in `src/composables/useThinkFlow.ts`.
 
 ### Supabase/Cloud Sync
+
 - Supabase is optional and used for auth + sync.
 - Route cloud writes through composables (`useAuth`, `useProjects`, `useCloudStorage`).
 - Local storage is source of truth when unauthenticated.

@@ -1,5 +1,5 @@
 {
-  "name": "omnimind-v1",
+  "name": "OmniMind-v1",
   "compatibility_date": "2026-01-21",
   "main": "src/worker.js",
   "assets": {
@@ -17,7 +17,6 @@
     "VITE_IMAGE_MODEL": "",
     "VITE_IMAGE_API_KEY": ""
   },
-  
   "observability": {
     "logs": {
       "enabled": true,

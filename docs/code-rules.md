@@ -1,8 +1,8 @@
-# ThinkFlowAI Code Rules (ShopFront)
+# OmniMind Code Rules (ShopFront)
 
 ## Project: ShopFront
 
-- Purpose: OmniMind (ThinkFlowAI) is a Vue 3 + TypeScript app for AI-powered mind mapping and idea expansion with local-first storage and optional Supabase sync.
+- Purpose: OmniMind (OmniMind) is a Vue 3 + TypeScript app for AI-powered mind mapping and idea expansion with local-first storage and optional Supabase sync.
 - Tech stack: Vue 3, TypeScript, Vite, Vue Flow, Tailwind CSS, Supabase, Vue I18n, Axios.
 - Deployment: Cloudflare Pages via Wrangler (build + deploy).
 

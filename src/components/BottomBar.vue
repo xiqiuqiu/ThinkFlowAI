@@ -228,7 +228,7 @@ const handleBallClick = () => {
       class="flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black tracking-widest uppercase select-none shadow-sm"
     >
       <!-- <a
-        href="https://github.com/liu-ziting/ThinkFlowAI"
+        href="https://github.com/liu-ziting/OmniMind"
         target="_blank"
         rel="noopener noreferrer"
         class="flex items-center gap-1.5 text-slate-500 hover:text-orange-500 transition-colors"

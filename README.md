@@ -1,215 +1,182 @@
-<h1 align="center">🧠 OmniMind</h1>
+# OmniMind (ThinkFlowAI)
 
-<p align="center">
-  <strong>用 AI 将想法变成可视化知识图谱</strong><br>
-  <em>本地优先 · 隐私安全 · 无限探索</em>
-</p>
+[English](#english) | [中文](#chinese)
 
-<p align="center">
-  <a href="https://github.com/vuejs/core"><img src="https://img.shields.io/badge/vue-3.x-brightgreen.svg" alt="vue"></a>
-  <a href="https://github.com/vitejs/vite"><img src="https://img.shields.io/badge/vite-5.x-646cff.svg" alt="vite"></a>
-  <a href="https://github.com/microsoft/TypeScript"><img src="https://img.shields.io/badge/typescript-5.x-blue.svg" alt="typescript"></a>
-  <a href="https://github.com/tailwindlabs/tailwindcss"><img src="https://img.shields.io/badge/tailwind-3.x-38bdf8.svg" alt="tailwind"></a>
-  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-orange.svg" alt="license"></a>
-</p>
+<a name="english"></a>
 
-<p align="center">
-  <a href="./README.en.md">English</a> | 中文
-</p>
+## 🇬🇧 English
 
----
+**OmniMind** is a visual idea expansion and inspiration tool powered by LLM (Large Language Models). It allows users to create mind maps, expand ideas using AI, and manage knowledge in a local-first environment with optional cloud synchronization.
 
-## 🎯 这是什么？
+### ✨ Features
 
-**OmniMind** 是一个 AI 驱动的思维导图工具，帮你把模糊的想法变成清晰的知识结构。
+- **Visual Mind Mapping**: Intuitive canvas for creating and organizing ideas using nodes and edges.
+- **AI-Powered Expansion**: Leverage AI to generate new ideas, sub-topics, and connections based on your current context.
+- **Local-First Architecture**: Your data resides on your device by default, ensuring privacy and speed.
+- **Cloud Sync (Optional)**: Seamlessly sync your data with Supabase for multi-device access.
+- **Modern UI/UX**: Built with a premium, responsive design using Tailwind CSS and rich animations.
+- **I18n Support**: Fully localized interface.
 
-只需输入一个核心概念，AI 会自动帮你：
-- 🌳 **展开思维树** - 从一个想法生成完整的知识框架
-- 💬 **对话式探索** - 像聊天一样深入任何感兴趣的分支
-- 📝 **深度解析** - 为任何节点生成 300-500 字的专业分析
-- 🎨 **可视化配图** - 用 AI 生成图片帮助理解抽象概念
-- 📊 **全局总结** - 自动提取整个思维图谱的核心要点
+### 🛠️ Tech Stack
 
-**本地优先设计** - 所有数据存储在你的浏览器中，支持任何 OpenAI 兼容的 API，无需担心隐私泄露。
+- **Framework**: [Vue 3](https://vuejs.org/) + [TypeScript](https://www.typescriptlang.org/)
+- **Build Tool**: [Vite](https://vitejs.dev/)
+- **Styling**: [Tailwind CSS](https://tailwindcss.com/)
+- **Diagramming**: [Vue Flow](https://vueflow.dev/)
+- **Backend/Auth**: [Supabase](https://supabase.com/)
+- **Deployment**: [Cloudflare Pages](https://pages.cloudflare.com/)
 
----
+### 🚀 Getting Started
 
-## ✨ 核心功能
+#### Prerequisites
 
-### 🚀 智能思维扩展
+- Node.js (v18+ recommended)
+- npm or pnpm
 
-**告别"白纸焦虑"** - 不知道从哪开始？输入一个想法，AI 自动帮你构建初始框架。
-
-- **上下文感知追问** - AI 理解从根节点到当前节点的完整路径，每次回答都基于完整的上下文
-- **两种思考模式** - 切换"发散模式"（创意优先）和"严谨模式"（逻辑优先）
-- **智能布局** - 自动排列节点，避免重叠，保持图谱清晰
-
-### 🔍 深度内容挖掘
-
-**不止于大纲** - 每个节点都可以深入探索：
-
-- **深度回答** - 一键生成详细解析，支持 Markdown 格式
-- **AI 配图** - 为抽象概念生成视觉化图片
-- **图谱对话** - 基于整个知识图谱与 AI 对话提问
-- **全局总结** - 自动分析整个思维图谱，提取关键洞察
-
-### 🎨 强大的交互体验
-
-**像操作思维一样自然** - 流畅的交互让你专注于思考：
-
-- **演示模式** - 全屏展示，用键盘（←/→）在节点间导航
-- **实时搜索** - 快速定位任何节点
-- **层级拖拽** - 拖动父节点时子节点自动跟随
-- **子树折叠** - 管理大型图谱，在宏观和细节间自由切换
-- **对齐辅助线** - 拖动节点时显示智能对齐参考线
-- **便签功能** - 在画布上添加自由便签记录灵感
-- **导出 Markdown** - 将整个思维图谱导出为结构化文档
-
-### 🔐 隐私与灵活性
-
-- **本地优先** - 数据存储在浏览器 localStorage，完全掌控你的数据
-- **云端同步**（可选）- 支持 Supabase 云存储，多设备同步
-- **多项目管理** - 创建和切换多个独立的思维图谱项目
-- **API 自由** - 支持任何 OpenAI 兼容的 API（OpenAI、智谱、通义千问等）
-- **中英双语** - 完整的界面本地化支持
-
----
-
-## 🎬 快速开始
-
-### 在线体验
-
-立即访问：[omnimind.sigclr.com](https://omnimind.sigclr.com/)
-
-### 本地运行
+#### Installation
 
 ```bash
-# 1. 克隆项目
+# Clone the repository
 git clone https://github.com/xiqiuqiu/ThinkFlowAI.git
+
+# Enter the directory
 cd ThinkFlowAI
 
-# 2. 安装依赖
+# Install dependencies
 npm install
+```
 
-# 3. 启动开发服务器
+#### Development
+
+Start the local development server:
+
+```bash
 npm run dev
 ```
 
-访问 `http://localhost:5173` 即可使用。
+The application will be available at `http://localhost:5173`.
 
----
+#### Build
 
-## ⚙️ 配置你的 API
-
-项目默认使用 **OpenRouter** 服务（支持多种 AI 模型的统一接口）。
-
-### 方式一：使用 OpenRouter（推荐）
-
-1. 访问 [OpenRouter](https://openrouter.ai/) 注册并获取 API Key
-2. 点击右上角的 ⚙️ 设置按钮
-3. 选择"自定义配置"，填入：
-   - **对话 API**：
-     - Base URL: `https://openrouter.ai/api/v1/chat/completions`
-     - Model: `google/gemini-2.5-flash`（或其他支持的模型）
-     - API Key: 你的 OpenRouter Key
-   - **图片 API**：
-     - Base URL: `https://openrouter.ai/api/v1/chat/completions`
-     - Model: `bytedance-seed/seedream-4.5`（或其他支持的图片模型）
-     - API Key: 你的 OpenRouter Key
-
-### 方式二：使用环境变量
-
-创建 `.env` 文件：
+Build the project for production:
 
 ```bash
-VITE_CHAT_BASE_URL=https://openrouter.ai/api/v1/chat/completions
-VITE_CHAT_MODEL=google/gemini-2.5-flash
-VITE_CHAT_API_KEY=your-openrouter-key
-
-VITE_IMAGE_BASE_URL=https://openrouter.ai/api/v1/chat/completions
-VITE_IMAGE_MODEL=bytedance-seed/seedream-4.5
-VITE_IMAGE_API_KEY=your-openrouter-key
-```
-
-### 兼容性说明
-
-- **对话 API**：完全兼容 OpenAI Chat Completions 格式，可以使用任何兼容的服务（OpenAI、智谱、通义千问等）
-- **图片 API**：目前使用 OpenRouter 的图片生成格式，如需使用 OpenAI DALL-E 或其他服务，需要修改 `src/composables/useThinkFlow.ts` 中的响应解析代码
-
----
-
-## 🎯 使用场景
-
-- **学习新知识** - 输入一个主题，AI 帮你构建完整的知识框架
-- **头脑风暴** - 从一个想法出发，探索各种可能性
-- **写作大纲** - 快速生成文章或报告的结构
-- **项目规划** - 分解复杂项目为可执行的子任务
-- **知识整理** - 将碎片化的信息组织成结构化的知识图谱
-- **演讲准备** - 用演示模式展示你的思维过程
-
----
-
-## 🛠️ 技术栈
-
-- **Vue 3** - 现代化的响应式框架
-- **TypeScript** - 类型安全
-- **Vite** - 极速开发体验
-- **VueFlow** - 强大的流程图引擎
-- **Tailwind CSS** - 优雅的界面设计
-- **Supabase**（可选）- 云端数据同步
-
----
-
-## 📦 部署
-
-### 部署到 Cloudflare Pages（推荐）
-
-项目已配置好 Cloudflare Pages 部署：
-
-```bash
-# 一键构建并部署
-npm run deploy
-```
-
-首次部署需要先登录 Cloudflare：
-```bash
-npx wrangler login
-```
-
-### 部署到其他平台
-
-项目是标准的 Vite 应用，也可以部署到其他静态托管服务：
-
-```bash
-# 构建生产版本
 npm run build
 ```
 
-生成的 `dist/` 目录可以部署到：
-- **Vercel** - 导入 GitHub 仓库，自动识别 Vite 项目
-- **Netlify** - 拖拽 `dist` 文件夹或连接 Git 仓库
-- **GitHub Pages** - 使用 GitHub Actions 自动部署
-- 任何支持静态文件的服务器
+### ⚙️ Configuration
+
+Copy the example environment file and configure your credentials:
+
+```bash
+cp .env.example .env
+```
+
+**Key Environment Variables:**
+
+- `VITE_SUPABASE_URL`: Your Supabase project URL.
+- `VITE_SUPABASE_ANON_KEY`: Your Supabase anonymous API key.
+- `VITE_OPENAI_API_KEY`: (Optional) For AI features if not configured via UI.
+
+### 📦 Deployment
+
+This project is configured for deployment on **Cloudflare Pages**.
+
+```bash
+npm run deploy
+```
 
 ---
 
-## 🤝 贡献
+<a name="chinese"></a>
 
-欢迎提交 Issue 和 Pull Request！
+## 🇨🇳 中文
 
----
+**OmniMind** 是一款由大语言模型（LLM）驱动的视觉化创意扩展与灵感工具。它允许用户创建思维导图，利用 AI 扩展想法，并在本地优先的环境可以管理知识，同时支持可选的云端同步。
 
-## 📄 开源协议
+### ✨ 功能特性
 
-MIT License - 自由使用、修改和分发
+- **可视化思维导图**：直观的画布，使用节点和连线轻松创建和组织想法。
+- **AI 驱动创意扩展**：利用 AI 根据当前上下文生成新观点、子主题和关联。
+- **本地优先架构**：默认情况下数据存储在本地设备上，确保隐私和速度。
+- **云端同步（可选）**：支持与 Supabase 无缝同步，实现多设备访问。
+- **现代 UI/UX**：使用 Tailwind CSS 构建的高级响应式设计，包含丰富的交互动画。
+- **多语言支持**：完全本地化的用户界面。
 
----
+### 🛠️ 技术栈
+
+- **框架**: [Vue 3](https://vuejs.org/) + [TypeScript](https://www.typescriptlang.org/)
+- **构建工具**: [Vite](https://vitejs.dev/)
+- **样式**: [Tailwind CSS](https://tailwindcss.com/)
+- **图表库**: [Vue Flow](https://vueflow.dev/)
+- **后端/认证**: [Supabase](https://supabase.com/)
+- **部署**: [Cloudflare Pages](https://pages.cloudflare.com/)
+
+### 🚀 快速开始
+
+#### 前置要求
+
+- Node.js (建议 v18+)
+- npm 或 pnpm
+
+#### 安装
+
+```bash
+# 克隆仓库
+git clone https://github.com/xiqiuqiu/ThinkFlowAI.git
+
+# 进入目录
+cd ThinkFlowAI
+
+# 安装依赖
+npm install
+```
+
+#### 开发
+
+启动本地开发服务器：
+
+```bash
+npm run dev
+```
+
+应用将在 `http://localhost:5173` 访问。
+
+#### 构建
+
+构建生产版本：
+
+```bash
+npm run build
+```
+
+### ⚙️ 配置
+
+复制示例环境变量文件并配置您的凭据：
+
+```bash
+cp .env.example .env
+```
+
+**主要环境变量：**
+
+- `VITE_SUPABASE_URL`: 您的 Supabase 项目 URL。
+- `VITE_SUPABASE_ANON_KEY`: 您的 Supabase 匿名 API Key。
+- `VITE_OPENAI_API_KEY`: (可选) 用于 AI 功能（也可在 UI 中配置）。
+
+### 📦 部署
+
+本项目已配置为通过 **Cloudflare Pages** 进行部署。
+
+```bash
+npm run deploy
+```
 
 ## ❤️ 致谢
 
 本项目基于 [ThinkFlowAI](https://github.com/ThinkFlowAI/ThinkFlowAI) 开发。
 
-感谢原作者 [lz-t](https://github.com/lz-t) 及 [ThinkFlowAI 团队](https://github.com/ThinkFlowAI) 的开源贡献。
+感谢原作者 [lz-t](https://github.com/lz-t) 的开源贡献。
 
 ---
 

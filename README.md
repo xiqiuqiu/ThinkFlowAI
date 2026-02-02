@@ -123,10 +123,10 @@ npm run deploy
 
 ```bash
 # 克隆仓库
-git clone https://github.com/xiqiuqiu/ThinkFlowAI.git
+git clone https://github.com/xiqiuqiu/OmniMind.git
 
 # 进入目录
-cd ThinkFlowAI
+cd OmniMind
 
 # 安装依赖
 npm install

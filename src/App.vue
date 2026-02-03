@@ -186,11 +186,55 @@ const isInitialProjectLoading = ref(false);
 // - 对已登录用户：需有当前项目（避免认证完成到项目加载之间的闪现）
 const isAppReady = computed(() => {
   if (!authInitialized.value) return false;
-  if (isInitialProjectLoading.value || isSyncing.value) return false;
-  // 已登录用户需等待项目就绪
-  if (isAuthenticated.value && !currentProject.value) return false;
+  if (isInitialProjectLoading.value) return false;
+  // Modified: Allow rendering if authenticated but no project (Empty State for new users)
+  // if (isAuthenticated.value && !currentProject.value) return false;
   return true;
 });
+
+// Lazy Project Creation
+const isCreatingProject = ref(false);
+
+watch(
+  () => flowNodes.value.length,
+  async (newCount) => {
+    if (
+      isAuthenticated.value &&
+      !currentProject.value &&
+      newCount > 0 &&
+      !isCreatingProject.value
+    ) {
+      console.log("[App] Lazy creating default project...");
+      isCreatingProject.value = true;
+      try {
+        const newProject = await createProject(t("project.defaultName"));
+        if (newProject) {
+          selectProject(newProject);
+          // Re-init sync with the new project context
+          initCloudSync(async (nodes: any[], edges: any[]) => {
+            detectChanges(nodes, edges);
+            await Promise.all([
+              saveNodesToCloud(nodes),
+              saveEdgesToCloud(edges),
+              syncDeletions(),
+            ]);
+          });
+          // Force immediate save
+          detectChanges(flowNodes.value, flowEdges.value);
+          await Promise.all([
+            saveNodesToCloud(flowNodes.value),
+            saveEdgesToCloud(flowEdges.value),
+          ]);
+          console.log("[App] Default project created and data saved.");
+        }
+      } catch (e) {
+        console.error("[App] Failed to lazy create project:", e);
+      } finally {
+        isCreatingProject.value = false;
+      }
+    }
+  },
+);
 
 // 监听登录状态，启用云端同步
 watch(
@@ -519,7 +563,10 @@ const handleDeleteFromMenu = (id: string) => {
         </Transition>
 
         <VueFlow
-          :default-edge-options="{ type: config.edgeType }"
+          :default-edge-options="{
+            type: config.edgeType,
+            style: { stroke: config.edgeColor },
+          }"
           :fit-view-on-init="false"
           :min-zoom="0.05"
           :max-zoom="4"
@@ -813,7 +860,7 @@ body {
 .vue-flow__minimap {
   @apply !bg-white/80 !backdrop-blur-md !border-slate-200 !shadow-2xl !rounded-xl !overflow-hidden !transition-all;
   display: none !important;
-  bottom: 130px !important;
+  bottom: 230px !important;
   right: 1rem !important;
   width: 140px !important;
   height: 100px !important;
@@ -829,7 +876,7 @@ body {
 @media (min-width: 768px) {
   .vue-flow__minimap {
     display: block !important;
-    bottom: 1.5rem !important;
+    bottom: 4.5rem !important;
     right: 1.5rem !important;
     width: 220px !important;
     height: 160px !important;

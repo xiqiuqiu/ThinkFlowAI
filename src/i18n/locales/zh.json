@@ -136,7 +136,8 @@
     "create": "新建项目",
     "empty": "暂无项目，点击下方创建",
     "namePlaceholder": "输入项目名称",
-    "deleteConfirm": "确定要删除此项目吗？此操作不可撤销。"
+    "deleteConfirm": "确定要删除此项目吗？此操作不可撤销。",
+    "defaultName": "我的第一个项目"
   },
 
   "prompts": {

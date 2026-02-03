@@ -25,6 +25,20 @@ import MarkdownIt from "markdown-it";
 type Translate = (key: string, params?: any) => string;
 
 /**
+ * 工具函数：清理节点数据以供 localStorage 存储
+ * 移除 imageUrl 字段以节省空间，图片数据仅由云端保存
+ */
+const sanitizeNodesForLocalStorage = (nodes: any[]) => {
+  return nodes.map((node) => ({
+    ...node,
+    data: {
+      ...node.data,
+      imageUrl: undefined, // 移除图片数据
+    },
+  }));
+};
+
+/**
  * 创建 ThinkFlow 的业务上下文。
  * @param t 国际化翻译函数
  * @param locale 当前语言（用于持久化语言选择）
@@ -655,7 +669,9 @@ export function useThinkFlow({
         try {
           localStorage.setItem(
             `thinkflow_${projectId}_nodes`,
-            JSON.stringify(toRaw(flowNodes.value)),
+            JSON.stringify(
+              sanitizeNodesForLocalStorage(toRaw(flowNodes.value)),
+            ),
           );
           localStorage.setItem(
             `thinkflow_${projectId}_edges`,
@@ -698,6 +714,36 @@ export function useThinkFlow({
   );
 
   /**
+   * 监听连线类型配置变化，实时更新所有已存在的连线
+   */
+  watch(
+    () => config.edgeType,
+    (newType) => {
+      if (isInitialLoad.value) return;
+      const updatedEdges = flowEdges.value.map((edge) => ({
+        ...edge,
+        type: newType,
+      }));
+      setEdges(updatedEdges);
+    },
+  );
+
+  /**
+   * 监听连线颜色配置变化，实时更新所有已存在的连线
+   */
+  watch(
+    () => config.edgeColor,
+    (newColor) => {
+      if (isInitialLoad.value) return;
+      const updatedEdges = flowEdges.value.map((edge) => ({
+        ...edge,
+        style: { ...edge.style, stroke: newColor },
+      }));
+      setEdges(updatedEdges);
+    },
+  );
+
+  /**
    * 初始化时从本地存储恢复状态
    */
   onMounted(async () => {
@@ -724,6 +770,7 @@ export function useThinkFlow({
             ...n,
             data: {
               ...n.data,
+              imageUrl: null, // localStorage 不含图片，从云端恢复时再加载
               isImageLoading: false,
               isExpanding: false,
               isDeepDiving: false,
@@ -868,7 +915,7 @@ export function useThinkFlow({
       // 缓存到 localStorage
       localStorage.setItem(
         `thinkflow_${projectId}_nodes`,
-        JSON.stringify(cloudData.nodes),
+        JSON.stringify(sanitizeNodesForLocalStorage(cloudData.nodes)),
       );
       localStorage.setItem(
         `thinkflow_${projectId}_edges`,
@@ -896,7 +943,7 @@ export function useThinkFlow({
     try {
       localStorage.setItem(
         `thinkflow_${projectId}_nodes`,
-        JSON.stringify(toRaw(flowNodes.value)),
+        JSON.stringify(sanitizeNodesForLocalStorage(toRaw(flowNodes.value))),
       );
       localStorage.setItem(
         `thinkflow_${projectId}_edges`,
@@ -2055,6 +2102,9 @@ export function useThinkFlow({
         // 生成子节点
         processSubNodes(result.nodes, rootId, startX, startY);
 
+        // 等待响应式更新完成，确保 edges 已同步至 flowEdges.value
+        await nextTick();
+
         // 关键：立即保存到云端（根节点生成）
         await immediateCloudSave();
 
@@ -2174,9 +2224,9 @@ export function useThinkFlow({
 
         // 创建单个回答子节点
         const childId = `node-${Date.now()}`;
+        const fullLabel = customInput || "追问";
         const shortLabel =
-          customInput?.slice(0, 15) +
-            (customInput && customInput.length > 15 ? "..." : "") || "追问";
+          fullLabel.length > 30 ? fullLabel.slice(0, 30) + "..." : fullLabel;
 
         const parentNodeObj = flowNodes.value.find(
           (n) => n.id === parentNode.id,
@@ -2190,6 +2240,7 @@ export function useThinkFlow({
           position: { x: startX + 450, y: startY },
           data: {
             label: shortLabel,
+            fullLabel: fullLabel,
             description: summaryContent,
             type: "child",
             detailedContent: answerContent,
@@ -2220,6 +2271,9 @@ export function useThinkFlow({
             data: { ...parentNodeObj.data, followUp: "", isExpanding: false },
           });
         }
+
+        // 等待响应式更新完成
+        await nextTick();
 
         // 聚焦新节点
         setTimeout(() => {

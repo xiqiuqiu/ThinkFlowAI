@@ -262,6 +262,7 @@ const getNodePosition = (id: string) =>
         <h3
           class="font-black text-slate-900 tracking-tight cursor-pointer hover:text-orange-600 transition-colors"
           :class="props.data.isTitleExpanded ? 'whitespace-normal' : 'truncate'"
+          :title="props.data.fullLabel || props.data.label"
           @click.stop="
             props.updateNode(props.id, {
               data: {

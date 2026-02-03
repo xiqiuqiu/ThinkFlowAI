@@ -136,7 +136,8 @@
     "create": "New Project",
     "empty": "No projects yet. Click below to create one.",
     "namePlaceholder": "Enter project name",
-    "deleteConfirm": "Are you sure you want to delete this project? This action cannot be undone."
+    "deleteConfirm": "Are you sure you want to delete this project? This action cannot be undone.",
+    "defaultName": "My First Project"
   },
 
   "prompts": {

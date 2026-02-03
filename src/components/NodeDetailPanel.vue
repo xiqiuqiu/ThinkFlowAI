@@ -244,7 +244,7 @@ const handleSpawn = () => {
       class="p-4 border-b border-stone-100 flex items-center justify-between flex-shrink-0 bg-white z-10"
     >
       <div class="min-w-0">
-        <h2 class="text-sm font-black text-slate-900 truncate">
+        <h2 class="text-sm font-black text-slate-900">
           {{ nodeTitle || t("node.coreIdea") }}
         </h2>
       </div>
@@ -408,10 +408,29 @@ const handleSpawn = () => {
             class="w-3 h-3 text-orange-400 animate-ai-glow"
             :stroke-width="1.5"
           />
+          <span class="text-[9px] font-medium text-orange-400 animate-pulse">
+            {{ t("common.generating") }}
+          </span>
         </div>
       </div>
 
-      <div class="flex flex-wrap gap-2">
+      <!-- Loading Skeleton -->
+      <div
+        v-if="
+          nodeData.data.isGeneratingQuestions &&
+          !nodeData.data.derivedQuestions?.length
+        "
+        class="flex flex-col gap-2"
+      >
+        <div
+          v-for="i in 3"
+          :key="'skeleton-' + i"
+          class="h-10 bg-slate-200/50 rounded-lg animate-pulse"
+        ></div>
+      </div>
+
+      <!-- Actual Questions -->
+      <div v-else class="flex flex-wrap gap-2">
         <button
           v-for="(question, idx) in nodeData.data.derivedQuestions"
           :key="idx"

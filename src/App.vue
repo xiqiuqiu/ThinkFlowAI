@@ -336,10 +336,9 @@ watch(
       return;
     }
     if (project && isAuthenticated.value) {
-      // 首次加载（从无项目到有项目）设置初始加载状态
-      if (!oldProject) {
-        isInitialProjectLoading.value = true;
-      }
+      // 切换项目时始终启用加载状态，防止 BottomBar 因检测到无节点而闪现输入框
+      isInitialProjectLoading.value = true;
+
       // 重置同步状态
       resetSyncState();
       // 加载项目数据

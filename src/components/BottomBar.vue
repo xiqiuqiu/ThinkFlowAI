@@ -46,10 +46,11 @@ const inputRef = ref<HTMLInputElement>();
 // 计算输入框是否应该展开
 const isExpanded = computed(
   () =>
-    props.forceExpanded ||
-    isInputFocused.value ||
-    props.modelValue.trim().length > 0 ||
-    !props.hasNodes, // 新项目（无节点）时始终展开
+    !props.isLoading &&
+    (props.forceExpanded ||
+      isInputFocused.value ||
+      props.modelValue.trim().length > 0 ||
+      !props.hasNodes), // 新项目（无节点）时始终展开；加载中自动收起
 );
 
 // 处理输入框焦点
@@ -95,7 +96,7 @@ const handleBackdropClick = () => {
   <!-- 虚化背景遮罩 - 仅在有节点且展开时显示 -->
   <Transition name="backdrop">
     <div
-      v-if="props.hasNodes && isExpanded"
+      v-if="props.hasNodes && isExpanded && !props.isLoading"
       class="fixed inset-0 z-[60] bg-slate-900/40 backdrop-blur-sm"
       @click="handleBackdropClick"
     ></div>

@@ -15,6 +15,8 @@ import {
   Terminal,
   Unlock,
   X,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-vue-next";
 import MarkdownIt from "markdown-it";
 
@@ -44,6 +46,7 @@ const md = new MarkdownIt({
 });
 
 const followUp = ref("");
+const isReasoningExpanded = ref(false); // 默认收起思考过程
 const selectedText = ref("");
 const showSelectionAction = ref(false);
 const selectionPosition = ref({ x: 0, y: 0, transformX: "-50%" });
@@ -347,7 +350,11 @@ const handleSpawn = () => {
 
         <!-- Detail Content -->
         <div
-          v-if="nodeData.data.isDeepDiving"
+          v-if="
+            nodeData.data.isDeepDiving &&
+            !nodeData.data.reasoningContent &&
+            !nodeData.data.detailedContent
+          "
           class="flex flex-col items-center py-6"
         >
           <Sparkles
@@ -359,8 +366,42 @@ const handleSpawn = () => {
             >{{ t("common.loading") }}</span
           >
         </div>
-        <div v-else-if="nodeData.data.detailedContent" class="relative">
+        <div
+          v-else-if="
+            nodeData.data.detailedContent || nodeData.data.reasoningContent
+          "
+          class="relative"
+        >
+          <!-- AI Reasoning Process -->
           <div
+            v-if="nodeData.data.reasoningContent"
+            class="mb-4 rounded-lg border border-stone-200/50 overflow-hidden transition-all duration-300"
+            :class="isReasoningExpanded ? 'bg-stone-100/50' : 'bg-transparent'"
+          >
+            <div
+              class="flex items-center gap-1.5 p-2 cursor-pointer hover:bg-stone-100/50 transition-colors select-none"
+              @click="isReasoningExpanded = !isReasoningExpanded"
+            >
+              <component
+                :is="isReasoningExpanded ? ChevronDown : ChevronRight"
+                class="w-3 h-3 text-stone-400"
+              />
+              <Sparkles class="w-3 h-3 text-orange-400/70 animate-pulse" />
+              <span
+                class="text-stone-400 uppercase tracking-widest font-bold text-[9px]"
+                >Thinking Process</span
+              >
+            </div>
+            <div
+              v-if="isReasoningExpanded"
+              class="px-3 pb-3 text-[10px] text-stone-500 font-mono whitespace-pre-wrap leading-relaxed select-text border-t border-stone-200/30 pt-2"
+            >
+              {{ nodeData.data.reasoningContent }}
+            </div>
+          </div>
+
+          <div
+            v-if="nodeData.data.detailedContent"
             ref="contentRef"
             class="markdown-body text-slate-700 leading-relaxed font-medium"
             v-html="renderedContent"

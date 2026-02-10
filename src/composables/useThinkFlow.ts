@@ -1745,6 +1745,92 @@ export function useThinkFlow({
   };
 
   /**
+   * 构建请求头：OpenRouter 需额外添加 HTTP-Referer 与 X-Title
+   */
+  const buildHeaders = (
+    baseUrl: string,
+    apiKey: string,
+  ): Record<string, string> => {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    };
+    if (baseUrl.includes("openrouter.ai")) {
+      headers["HTTP-Referer"] = window.location.origin;
+      headers["X-Title"] = "ThinkFlowAI";
+    }
+    return headers;
+  };
+
+  /**
+   * 剥离 Markdown 围栏（```json ... ```），使原始文本可被 JSON.parse
+   * 支持流式处理：即使没有结尾围栏，只要有开头也剥离
+   */
+  const stripJsonFences = (raw: string): string => {
+    const trimmed = raw.trim();
+    // 匹配开头
+    const startMatch = trimmed.match(/^```(?:json)?\s*\n?/i);
+    if (startMatch) {
+      let content = trimmed.slice(startMatch[0].length);
+      // 尝试匹配结尾
+      const endMatch = content.match(/\n?```$/);
+      if (endMatch) {
+        content = content.slice(0, endMatch.index);
+      }
+      return content.trim();
+    }
+    return trimmed;
+  };
+
+  /**
+   * 读取 OpenAI 兼容 SSE 流，逐 token 回调
+   */
+  const readSSEStream = async (
+    response: Response,
+    onDelta: (
+      delta: string,
+      fullContent: string,
+      reasoningDelta?: string,
+    ) => void,
+  ): Promise<string> => {
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let sseBuffer = "";
+    let fullContent = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      sseBuffer += decoder.decode(value, { stream: true });
+
+      const lines = sseBuffer.split("\n");
+      sseBuffer = lines.pop() || "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith("data: ")) continue;
+        const payload = trimmed.slice(6);
+        if (payload === "[DONE]") return fullContent;
+
+        try {
+          const chunk = JSON.parse(payload);
+          const deltaObj = chunk.choices?.[0]?.delta;
+          const delta = deltaObj?.content || "";
+          const reasoning = deltaObj?.reasoning || "";
+
+          if (delta || reasoning) {
+            fullContent += delta;
+            onDelta(delta, fullContent, reasoning);
+          }
+        } catch (e) {
+          console.warn("SSE Parse Error:", e);
+        }
+      }
+    }
+    return fullContent;
+  };
+
+  /**
    * 总结：基于当前所有节点信息生成一段总结文本
    * - 结果展示在 SummaryModal
    */
@@ -1816,10 +1902,7 @@ export function useThinkFlow({
     try {
       const response = await fetch(useConfig.baseUrl, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${finalApiKey}`,
-        },
+        headers: buildHeaders(useConfig.baseUrl, finalApiKey),
         body: JSON.stringify({
           model: useConfig.model,
           messages: [
@@ -1881,10 +1964,7 @@ export function useThinkFlow({
           : path.join(" -> ");
       const response = await fetch(useConfig.baseUrl, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${finalApiKey}`,
-        },
+        headers: buildHeaders(useConfig.baseUrl, finalApiKey),
         body: JSON.stringify({
           model: useConfig.model,
           // prompt: t("prompts.image", { topic, detail, context }),
@@ -1971,10 +2051,7 @@ export function useThinkFlow({
 
       const response = await fetch(useConfig.baseUrl, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${finalApiKey}`,
-        },
+        headers: buildHeaders(useConfig.baseUrl, finalApiKey),
         body: JSON.stringify({
           model: useConfig.model,
           messages: [
@@ -1995,6 +2072,7 @@ export function useThinkFlow({
               }),
             },
           ],
+          stream: true,
         }),
       });
 
@@ -2003,17 +2081,39 @@ export function useThinkFlow({
         error.status = response.status;
         throw error;
       }
-      const data = await response.json();
-      const content = data.choices[0].message.content;
 
-      updateNode(nodeId, {
-        data: {
-          ...node.data,
-          detailedContent: content,
-          isDeepDiving: false,
-          error: null,
+      // 流式实时更新深挖内容
+      let accumulatedReasoning = "";
+      const content = await readSSEStream(
+        response,
+        (_delta, full, reasoning) => {
+          const currentNode = flowNodes.value.find((n) => n.id === nodeId);
+          if (reasoning) accumulatedReasoning += reasoning;
+
+          if (currentNode) {
+            updateNode(nodeId, {
+              data: {
+                ...currentNode.data,
+                detailedContent: full,
+                reasoningContent: accumulatedReasoning,
+                isDeepDiving: true,
+              },
+            });
+          }
         },
-      });
+      );
+
+      const finalNode = flowNodes.value.find((n) => n.id === nodeId);
+      if (finalNode) {
+        updateNode(nodeId, {
+          data: {
+            ...finalNode.data,
+            detailedContent: content,
+            isDeepDiving: false,
+            error: null,
+          },
+        });
+      }
 
       // 自动生成衍生问题
       generateDerivedQuestions(nodeId, content);
@@ -2191,17 +2291,14 @@ export function useThinkFlow({
       try {
         const response = await fetch(useConfig.baseUrl, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${finalApiKey}`,
-          },
+          headers: buildHeaders(useConfig.baseUrl, finalApiKey),
           body: JSON.stringify({
             model: useConfig.model,
             messages: [
               { role: "system", content: systemPrompt },
               { role: "user", content: userMessage },
             ],
-            response_format: { type: "json_object" },
+            stream: true,
             temperature: 0.8,
           }),
         });
@@ -2212,47 +2309,167 @@ export function useThinkFlow({
           throw error;
         }
 
-        const data = await response.json();
-        const result = JSON.parse(data.choices[0].message.content);
+        // 流式增量渲染
+        let renderedNodeCount = 0;
+        let overviewSet = false;
+        const nodeRegex =
+          /\{\s*"text"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,\s*"description"\s*:\s*"((?:[^"\\]|\\.)*)"\s*\}/g;
+        const overviewRegex = /"overview"\s*:\s*"((?:[^"\\]|\\.)*)"/;
 
-        // 根节点恢复批量生成子节点
+        const rawContent = await readSSEStream(response, (_delta, full) => {
+          const stripped = stripJsonFences(full);
+
+          // 实时更新 overview
+          if (!overviewSet) {
+            const ovMatch = stripped.match(overviewRegex);
+            if (ovMatch) {
+              overviewSet = true;
+              const rootNode = flowNodes.value.find((n) => n.id === rootId);
+              if (rootNode) {
+                updateNode(rootId, {
+                  data: {
+                    ...rootNode.data,
+                    description: ovMatch[1]
+                      .replace(/\\"/g, '"')
+                      .replace(/\\n/g, "\n"),
+                    isExpanding: true,
+                    error: null,
+                  },
+                });
+              }
+            }
+          }
+
+          // 逐个检测并渲染子节点
+          const matches = [...stripped.matchAll(nodeRegex)];
+          if (matches.length > renderedNodeCount) {
+            const rootNode = flowNodes.value.find((n) => n.id === rootId);
+            const baseX = rootNode ? rootNode.position.x : 50;
+            const baseY = rootNode ? rootNode.position.y : 300;
+
+            for (let i = renderedNodeCount; i < matches.length; i++) {
+              const nodeText = matches[i][1]
+                .replace(/\\"/g, '"')
+                .replace(/\\n/g, "\n");
+              const nodeDesc = matches[i][2]
+                .replace(/\\"/g, '"')
+                .replace(/\\n/g, "\n");
+              const childId = `node-${Date.now()}-${i}`;
+              const totalEstimate = Math.max(matches.length, 5);
+              const offsetX = 450;
+              const offsetY = (i - (totalEstimate - 1) / 2) * 280;
+
+              addNodes({
+                id: childId,
+                type: "window",
+                position: { x: baseX + offsetX, y: baseY + offsetY },
+                data: {
+                  label: nodeText,
+                  description: nodeDesc,
+                  type: "child",
+                  followUp: "",
+                  isExpanding: false,
+                  isImageLoading: false,
+                  isTitleExpanded: false,
+                  error: null,
+                },
+                sourcePosition: Position.Right,
+                targetPosition: Position.Left,
+              });
+
+              addEdges({
+                id: `e-${rootId}-${childId}`,
+                source: rootId,
+                target: childId,
+                animated: true,
+                type: config.edgeType,
+                style: { stroke: config.edgeColor, strokeWidth: 2 },
+                markerEnd: MarkerType.ArrowClosed,
+              });
+            }
+            renderedNodeCount = matches.length;
+          }
+        });
+
+        // 流结束：最终解析确保数据完整
+        const finalResult = JSON.parse(stripJsonFences(rawContent));
         const rootNode = flowNodes.value.find((n) => n.id === rootId);
         if (rootNode) {
           updateNode(rootId, {
             data: {
               ...rootNode.data,
-              description: result.overview || "",
+              description:
+                finalResult.overview || rootNode.data.description || "",
               isExpanding: false,
               error: null,
             },
           });
         }
 
-        const startX = rootNode ? rootNode.position.x : 50;
-        const startY = rootNode ? rootNode.position.y : 300;
+        // 若流中有遗漏节点，补充渲染
+        const finalNodes = finalResult.nodes || [];
+        if (finalNodes.length > renderedNodeCount) {
+          const baseX = rootNode ? rootNode.position.x : 50;
+          const baseY = rootNode ? rootNode.position.y : 300;
+          for (let i = renderedNodeCount; i < finalNodes.length; i++) {
+            const item = finalNodes[i];
+            const childId = `node-${Date.now()}-${i}`;
+            const offsetX = 450;
+            const offsetY = (i - (finalNodes.length - 1) / 2) * 280;
 
-        // 生成子节点
-        processSubNodes(result.nodes, rootId, startX, startY);
+            addNodes({
+              id: childId,
+              type: "window",
+              position: { x: baseX + offsetX, y: baseY + offsetY },
+              data: {
+                label: item.text,
+                description: item.description,
+                type: "child",
+                followUp: "",
+                isExpanding: false,
+                isImageLoading: false,
+                isTitleExpanded: false,
+                error: null,
+              },
+              sourcePosition: Position.Right,
+              targetPosition: Position.Left,
+            });
 
-        // 等待响应式更新完成，确保 edges 已同步至 flowEdges.value
+            addEdges({
+              id: `e-${rootId}-${childId}`,
+              source: rootId,
+              target: childId,
+              animated: true,
+              type: config.edgeType,
+              style: { stroke: config.edgeColor, strokeWidth: 2 },
+              markerEnd: MarkerType.ArrowClosed,
+            });
+          }
+        }
+
+        // 等待响应式更新完成
         await nextTick();
-
-        // 关键：立即保存到云端（根节点生成）
         await immediateCloudSave();
 
-        setTimeout(() => {
-          resetLayout(); // 强制重排，确保对齐
-          const childEdges = flowEdges.value.filter((e) => e.source === rootId);
-          const childIds = childEdges.map((e) => e.target);
-          const nodesToFit = [rootId, ...childIds];
+        // 布局 & 画面适配
+        await nextTick();
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            resetLayout();
+            const childEdges = flowEdges.value.filter(
+              (e) => e.source === rootId,
+            );
+            const childIds = childEdges.map((e) => e.target);
+            const nodesToFit = [rootId, ...childIds];
 
-          fitView({
-            nodes: nodesToFit,
-            padding: 0.15,
-            duration: 1000,
-            maxZoom: 1.2,
-          });
-        }, 100);
+            fitView({
+              nodes: nodesToFit,
+              padding: 0.15,
+              duration: 1000,
+              maxZoom: 1.2,
+            });
+          }, 200);
+        });
       } catch (error: any) {
         console.error("Root Expansion Error:", error);
         const node = flowNodes.value.find((n) => n.id === rootId);
@@ -2317,44 +2534,7 @@ export function useThinkFlow({
           : useConfig.apiKey;
 
       try {
-        const response = await fetch(useConfig.baseUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${finalApiKey}`,
-          },
-          body: JSON.stringify({
-            model: useConfig.model,
-            messages: [
-              { role: "system", content: stylePrompt },
-              { role: "user", content: answerPrompt },
-            ],
-            response_format: { type: "json_object" },
-            temperature: 0.8,
-          }),
-        });
-
-        if (!response.ok) {
-          const error: any = new Error("AI request failed");
-          error.status = response.status;
-          throw error;
-        }
-
-        const data = await response.json();
-        const rawContent = data.choices[0].message.content;
-
-        // 尝试解析 JSON，失败时回退到原始文本
-        let answerContent = rawContent;
-        let summaryContent = "";
-        try {
-          const result = JSON.parse(rawContent);
-          answerContent = result.answer || rawContent;
-          summaryContent = result.summary || "";
-        } catch {
-          // JSON 解析失败，使用原始文本，摘要留空
-        }
-
-        // 创建单个回答子节点
+        // 先创建空子节点，流式填充内容
         const childId = `node-${Date.now()}`;
         const fullLabel = customInput || "追问";
         const shortLabel =
@@ -2373,12 +2553,12 @@ export function useThinkFlow({
           data: {
             label: shortLabel,
             fullLabel: fullLabel,
-            description: summaryContent,
+            description: "",
             type: "child",
-            detailedContent: answerContent,
+            detailedContent: "",
             isDetailExpanded: true,
             followUp: "",
-            isExpanding: false,
+            isExpanding: true,
             isImageLoading: false,
             isTitleExpanded: false,
             error: null,
@@ -2397,21 +2577,84 @@ export function useThinkFlow({
           markerEnd: MarkerType.ArrowClosed,
         });
 
+        // 聚焦新节点
+        await nextTick();
+        setTimeout(() => {
+          resetLayout();
+          fitView({ nodes: [childId], padding: 0.5, duration: 800 });
+        }, 100);
+
+        const response = await fetch(useConfig.baseUrl, {
+          method: "POST",
+          headers: buildHeaders(useConfig.baseUrl, finalApiKey),
+          body: JSON.stringify({
+            model: useConfig.model,
+            messages: [
+              { role: "system", content: stylePrompt },
+              { role: "user", content: answerPrompt },
+            ],
+            stream: true,
+            temperature: 0.8,
+          }),
+        });
+
+        if (!response.ok) {
+          const error: any = new Error("AI request failed");
+          error.status = response.status;
+          throw error;
+        }
+
+        // 流式实时更新子节点内容
+        let accumulatedReasoning = "";
+        const rawContent = await readSSEStream(
+          response,
+          (_delta, full, reasoning) => {
+            const childNode = flowNodes.value.find((n) => n.id === childId);
+            if (reasoning) accumulatedReasoning += reasoning;
+
+            if (childNode) {
+              updateNode(childId, {
+                data: {
+                  ...childNode.data,
+                  detailedContent: full,
+                  reasoningContent: accumulatedReasoning,
+                  isExpanding: true,
+                },
+              });
+            }
+          },
+        );
+
+        // 流结束：解析最终 JSON
+        let answerContent = rawContent;
+        let summaryContent = "";
+        try {
+          const result = JSON.parse(stripJsonFences(rawContent));
+          answerContent = result.answer || rawContent;
+          summaryContent = result.summary || "";
+        } catch {
+          // JSON 解析失败，使用原始流文本
+        }
+
+        const childNode = flowNodes.value.find((n) => n.id === childId);
+        if (childNode) {
+          updateNode(childId, {
+            data: {
+              ...childNode.data,
+              detailedContent: answerContent,
+              description: summaryContent,
+              isExpanding: false,
+              error: null,
+            },
+          });
+        }
+
         // 清空父节点的 followUp 输入
         if (parentNodeObj) {
           updateNode(parentNode.id, {
             data: { ...parentNodeObj.data, followUp: "", isExpanding: false },
           });
         }
-
-        // 等待响应式更新完成
-        await nextTick();
-
-        // 聚焦新节点
-        setTimeout(() => {
-          resetLayout(); // 强制重排
-          fitView({ nodes: [childId], padding: 0.5, duration: 800 });
-        }, 100);
 
         // 自动生成衍生问题
         generateDerivedQuestions(childId, answerContent);
@@ -2475,10 +2718,7 @@ export function useThinkFlow({
 
       const response = await fetch(useConfig.baseUrl, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${finalApiKey}`,
-        },
+        headers: buildHeaders(useConfig.baseUrl, finalApiKey),
         body: JSON.stringify({
           model: useConfig.model,
           messages: [
@@ -2492,7 +2732,7 @@ export function useThinkFlow({
               }),
             },
           ],
-          response_format: { type: "json_object" },
+          stream: true,
           temperature: 0.9,
         }),
       });
@@ -2503,17 +2743,21 @@ export function useThinkFlow({
         throw error;
       }
 
-      const data = await response.json();
-      const result = JSON.parse(data.choices[0].message.content);
+      // 流式累积后一次性解析
+      const rawContent = await readSSEStream(response, () => {});
+      const result = JSON.parse(stripJsonFences(rawContent));
       const questions = result.questions || [];
 
-      updateNode(nodeId, {
-        data: {
-          ...node.data,
-          derivedQuestions: questions.slice(0, 3),
-          isGeneratingQuestions: false,
-        },
-      });
+      const currentNode = flowNodes.value.find((n) => n.id === nodeId);
+      if (currentNode) {
+        updateNode(nodeId, {
+          data: {
+            ...currentNode.data,
+            derivedQuestions: questions.slice(0, 3),
+            isGeneratingQuestions: false,
+          },
+        });
+      }
 
       // 关键：立即保存到云端（衍生问题）
       await immediateCloudSave();

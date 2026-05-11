@@ -292,6 +292,30 @@ describe("BottomBar", () => {
         // Then
         expect(wrapper.emitted("expand")).toBeTruthy();
       });
+
+      it("Given 已有节点且输入框聚焦, When 提交后父层清空输入并结束加载, Then 输入框应保持收起", async () => {
+        // Given
+        const wrapper = createWrapper({ hasNodes: true, modelValue: "测试" });
+        const input = wrapper.find("input");
+        const submitBtn = wrapper
+          .findAll("button")
+          .find((btn) => btn.classes().includes("bg-slate-900"));
+
+        await input.trigger("focus");
+        await nextTick();
+
+        // When
+        await submitBtn?.trigger("click");
+        await wrapper.setProps({ modelValue: "", isLoading: true });
+        await nextTick();
+        await wrapper.setProps({ modelValue: "", isLoading: false });
+        await nextTick();
+
+        // Then
+        const inputBar = wrapper.find(".flex.items-center.bg-white\\/95");
+        expect(wrapper.emitted("expand")).toBeTruthy();
+        expect(inputBar.classes()).toContain("opacity-0");
+      });
     });
   });
 
@@ -406,7 +430,7 @@ describe("BottomBar", () => {
     });
 
     describe("Scenario: 加载时输入框与遮罩状态", () => {
-      it("Given isLoading 为 true 且有节点, When 输入框展开, Then 遮罩应正常显示", async () => {
+      it("Given isLoading 为 true 且有节点, When 输入框展开, Then 遮罩应保持隐藏", async () => {
         // Given
         const wrapper = createWrapper({
           hasNodes: true,
@@ -421,7 +445,7 @@ describe("BottomBar", () => {
         const backdrop = wrapper.find(
           ".fixed.inset-0.z-\\[60\\].bg-slate-900\\/40",
         );
-        expect(backdrop.exists()).toBe(true);
+        expect(backdrop.exists()).toBe(false);
       });
     });
 

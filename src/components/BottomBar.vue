@@ -90,6 +90,14 @@ const handleBackdropClick = () => {
     inputRef.value.blur();
   }
 };
+
+const handleExpand = () => {
+  isInputFocused.value = false;
+  if (inputRef.value) {
+    inputRef.value.blur();
+  }
+  emit("expand");
+};
 </script>
 
 <template>
@@ -172,7 +180,7 @@ const handleBackdropClick = () => {
           @input="
             emit('update:modelValue', ($event.target as HTMLInputElement).value)
           "
-          @keyup.enter="emit('expand')"
+          @keyup.enter="handleExpand"
           @focus="handleInputFocus"
           @blur="handleInputBlur"
         />
@@ -201,7 +209,7 @@ const handleBackdropClick = () => {
         </button>
         <!-- 提交按钮 -->
         <button
-          @click="emit('expand')"
+          @click="handleExpand"
           @mousedown.prevent
           type="button"
           :disabled="props.isLoading || !props.modelValue.trim()"

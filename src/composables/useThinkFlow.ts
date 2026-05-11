@@ -1088,6 +1088,51 @@ export function useThinkFlow({
     }
   };
 
+
+  /**
+   * 将当前画布绑定到指定项目，不重新加载数据。
+   * 用于首次创建云端项目时保留用户刚输入的内容。
+   */
+  const bindCanvasToProject = (projectId: string) => {
+    const previousProjectId = currentProjectId.value;
+
+    currentProjectId.value = projectId;
+    localStorage.setItem("thinkflow_current_project_id", projectId);
+    saveToLocalStorage();
+
+    if (previousProjectId && previousProjectId !== projectId) {
+      localStorage.removeItem(`thinkflow_${previousProjectId}_nodes`);
+      localStorage.removeItem(`thinkflow_${previousProjectId}_edges`);
+      localStorage.removeItem(`thinkflow_${previousProjectId}_collapsed`);
+
+      const guestProjectId = localStorage.getItem("thinkflow_guest_project_id");
+      if (guestProjectId === previousProjectId) {
+        localStorage.removeItem("thinkflow_guest_project_id");
+      }
+    }
+
+    console.log(`[ThinkFlow] 当前画布已绑定到项目: ${projectId}`);
+  };
+
+  /**
+   * 解除当前画布与项目的绑定。
+   * 用于删除最后一个项目后回到无项目状态。
+   */
+  const resetProjectBinding = () => {
+    const previousProjectId = currentProjectId.value;
+
+    currentProjectId.value = null;
+    localStorage.removeItem("thinkflow_current_project_id");
+
+    if (previousProjectId) {
+      localStorage.removeItem(`thinkflow_${previousProjectId}_nodes`);
+      localStorage.removeItem(`thinkflow_${previousProjectId}_edges`);
+      localStorage.removeItem(`thinkflow_${previousProjectId}_collapsed`);
+    }
+
+    console.log("[ThinkFlow] 当前画布已解除项目绑定");
+  };
+
   const applyCollapsedVisibility = () => {
     const hiddenIds = new Set<string>();
     const childrenCountById = new Map<string, number>();
@@ -2867,6 +2912,8 @@ export function useThinkFlow({
     cloudSyncEnabled,
     // 项目数据隔离
     loadProjectData,
+    bindCanvasToProject,
+    resetProjectBinding,
     clearCanvas,
     createDefaultRoot,
     currentProjectId,

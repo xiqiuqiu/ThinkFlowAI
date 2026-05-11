@@ -156,6 +156,8 @@ const {
   initCloudSync,
 
   loadProjectData,
+  bindCanvasToProject,
+  resetProjectBinding,
   showIdeaInput,
   clearCanvas,
   flowEdges,
@@ -173,14 +175,13 @@ const {
 } = useCloudStorage();
 
 // 获取当前项目
-const { currentProject, resetProject, createProject, selectProject } =
-  useProjects();
+const { currentProject, resetProject, createProject } = useProjects();
 
 // 初始项目加载状态（首次加载项目数据时为 true）
 const isInitialProjectLoading = ref(false);
 
-// 标记：正在处理游客数据（避免 watch 竞态）
-const isHandlingGuestData = ref(false);
+// 标记：正在把现有画布绑定到新项目（避免切项目时误清空当前画布）
+const isBindingCanvasToProject = ref(false);
 
 // 应用就绪状态：
 // - 认证初始化完成
@@ -209,10 +210,11 @@ watch(
     ) {
       console.log("[App] Lazy creating default project...");
       isCreatingProject.value = true;
+      isBindingCanvasToProject.value = true;
       try {
         const newProject = await createProject(t("project.defaultName"));
         if (newProject) {
-          selectProject(newProject);
+          bindCanvasToProject(newProject.id);
           // Re-init sync with the new project context
           initCloudSync(async (nodes: any[], edges: any[]) => {
             detectChanges(nodes, edges);
@@ -233,6 +235,7 @@ watch(
       } catch (e) {
         console.error("[App] Failed to lazy create project:", e);
       } finally {
+        isBindingCanvasToProject.value = false;
         isCreatingProject.value = false;
       }
     }
@@ -250,8 +253,8 @@ watch(
       const hasGuestData = guestNodes.length > 0;
 
       if (hasGuestData) {
-        // 设置标志，防止 currentProject watch 竞态
-        isHandlingGuestData.value = true;
+        // 设置标志，防止 currentProject watch 清空待保存的游客画布
+        isBindingCanvasToProject.value = true;
         // 游客有数据，自动保存为新项目
         console.log("[App] 检测到游客数据，自动创建项目保存");
         try {
@@ -263,8 +266,7 @@ watch(
           });
           const newProject = await createProject(`游客数据 ${timestamp}`);
           if (newProject) {
-            // 选中新项目
-            selectProject(newProject);
+            bindCanvasToProject(newProject.id);
             // 启用云端同步并立即保存游客数据
             initCloudSync(async (nodes: any[], edges: any[]) => {
               detectChanges(nodes, edges);
@@ -287,7 +289,7 @@ watch(
         } catch (error) {
           console.error("[App] 保存游客数据失败:", error);
         } finally {
-          isHandlingGuestData.value = false;
+          isBindingCanvasToProject.value = false;
         }
       } else {
         // 游客无数据，正常启用云端同步
@@ -331,8 +333,8 @@ watch(
   () => currentProject.value,
   async (project, oldProject) => {
     // 游客数据处理中，跳过加载（由 isAuthenticated watch 完成保存）
-    if (isHandlingGuestData.value) {
-      console.log("[App] 游客数据处理中，跳过 loadProjectData");
+    if (isBindingCanvasToProject.value) {
+      console.log("[App] 当前画布正在绑定到新项目，跳过 loadProjectData");
       return;
     }
     if (project && isAuthenticated.value) {
@@ -345,6 +347,14 @@ watch(
       await loadProjectData(project.id, loadFromCloud);
       // 加载完成
       isInitialProjectLoading.value = false;
+    } else if (!project && oldProject && isAuthenticated.value) {
+      console.log("[App] 当前项目已删除，清空画布与面板状态");
+      isInitialProjectLoading.value = false;
+      resetSyncState();
+      closeRightPanel();
+      resetProjectBinding();
+      await clearCanvas();
+      showIdeaInput.value = true;
     }
   },
 );

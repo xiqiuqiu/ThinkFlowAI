@@ -336,6 +336,53 @@ describe("useThinkFlow", () => {
       // Then: 应为 false
       expect(thinkFlow.showIdeaInput.value).toBe(false);
     });
+
+    it("should bind current canvas to a new project without keeping guest cache", () => {
+      // Given: 当前画布处于游客项目上下文
+      const guestProjectId = thinkFlow.currentProjectId.value;
+      expect(guestProjectId).toBeTruthy();
+      localStorage.setItem(`thinkflow_${guestProjectId}_nodes`, JSON.stringify([]));
+      localStorage.setItem(`thinkflow_${guestProjectId}_edges`, JSON.stringify([]));
+      localStorage.setItem(
+        `thinkflow_${guestProjectId}_collapsed`,
+        JSON.stringify([]),
+      );
+
+      // When: 绑定到新创建的正式项目
+      thinkFlow.bindCanvasToProject("project-123");
+
+      // Then: 当前项目上下文应更新，且游客缓存被清理
+      expect(thinkFlow.currentProjectId.value).toBe("project-123");
+      expect(localStorage.getItem("thinkflow_current_project_id")).toBe(
+        "project-123",
+      );
+      expect(localStorage.getItem("thinkflow_guest_project_id")).toBeNull();
+      expect(localStorage.getItem(`thinkflow_${guestProjectId}_nodes`)).toBeNull();
+      expect(localStorage.getItem("thinkflow_project-123_nodes")).toBe("[]");
+    });
+
+    it("should reset project binding and clear persisted project id", () => {
+      // Given: 当前画布已经绑定到一个正式项目
+      thinkFlow.bindCanvasToProject("project-123");
+      localStorage.setItem("thinkflow_project-123_nodes", JSON.stringify([]));
+      localStorage.setItem("thinkflow_project-123_edges", JSON.stringify([]));
+      localStorage.setItem(
+        "thinkflow_project-123_collapsed",
+        JSON.stringify([]),
+      );
+
+      // When: 删除最后一个项目后解除绑定
+      thinkFlow.resetProjectBinding();
+
+      // Then: 当前项目上下文和持久化键应被清理
+      expect(thinkFlow.currentProjectId.value).toBeNull();
+      expect(localStorage.getItem("thinkflow_current_project_id")).toBeNull();
+      expect(localStorage.getItem("thinkflow_project-123_nodes")).toBeNull();
+      expect(localStorage.getItem("thinkflow_project-123_edges")).toBeNull();
+      expect(
+        localStorage.getItem("thinkflow_project-123_collapsed"),
+      ).toBeNull();
+    });
   });
 
   // ============================================================
